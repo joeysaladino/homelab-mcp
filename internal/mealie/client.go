@@ -2,6 +2,7 @@
 package mealie
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -60,7 +61,7 @@ func NewClient(cfg config.MealieConfig, httpClient *http.Client) (*Client, error
 	}, nil
 }
 
-func (c *Client) request(ctx context.Context, method, resource string, query url.Values) (*http.Request, error) {
+func (c *Client) request(ctx context.Context, method, resource string, query url.Values, body io.Reader) (*http.Request, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("create mealie request: context is nil")
 	}
@@ -71,18 +72,33 @@ func (c *Client) request(ctx context.Context, method, resource string, query url
 	endpoint.RawQuery = query.Encode()
 	endpoint.Fragment = ""
 
-	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("create mealie request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	return req, nil
 }
 
 func (c *Client) getJSON(ctx context.Context, resource string, query url.Values, target any) error {
-	req, err := c.request(ctx, http.MethodGet, resource, query)
+	return c.doJSON(ctx, http.MethodGet, resource, query, nil, target)
+}
+
+func (c *Client) postJSON(ctx context.Context, resource string, payload any, target any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode mealie API request: %w", err)
+	}
+	return c.doJSON(ctx, http.MethodPost, resource, nil, bytes.NewReader(body), target)
+}
+
+func (c *Client) doJSON(ctx context.Context, method, resource string, query url.Values, body io.Reader, target any) error {
+	req, err := c.request(ctx, method, resource, query, body)
 	if err != nil {
 		return err
 	}

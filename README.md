@@ -10,13 +10,13 @@ services.
 The initial milestone is intentionally narrow:
 
 - typed configuration for the Mealie URL and server-side token;
-- a typed, read-only Mealie API client;
+- a typed Mealie API client with read operations and additive URL import;
 - two curated read-only MCP tools: `mealie.search_recipes` and
   `mealie.get_recipe`;
 - tests using an in-memory HTTP server and MCP transport.
 
-Write operations, pantry state, shopping-list synthesis, authentication, and
-observability will be added in later slices.
+Destructive operations, pantry state, shopping-list synthesis, authentication,
+and observability will be added in later slices.
 
 ## Local development
 
@@ -41,8 +41,8 @@ Run the normal offline test suite with:
 GOCACHE=/private/tmp/homelab-mcp-go-cache go test ./...
 ```
 
-An opt-in integration test launches the actual server as a subprocess and
-calls `mealie.search_recipes` against the configured Mealie instance:
+An opt-in read-only integration test launches the actual server as a
+subprocess and calls the recipe tools against the configured Mealie instance:
 
 ```sh
 set -a
@@ -53,3 +53,15 @@ GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homela
 
 The integration test is excluded from normal test runs so local development
 does not depend on network access or a live homelab.
+
+The URL-import integration test is a separate, explicit write check. It first
+looks for the exact source URL and skips if the recipe already exists:
+
+```sh
+set -a
+. ./.env
+set +a
+HOMELAB_MCP_LIVE_IMPORT=1 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerImportRecipeURL -count=1
+```
+
+Run that command only when you intend to create the supplied recipe in Mealie.

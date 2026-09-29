@@ -2,6 +2,7 @@ package mealie
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -193,6 +194,83 @@ func TestGetRecipeValidation(t *testing.T) {
 			_, err := client.GetRecipe(context.Background(), tt.identifier)
 			if err == nil {
 				t.Fatal("GetRecipe() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestImportRecipeURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/api/recipes/create/url" {
+			t.Errorf("path = %s, want /api/recipes/create/url", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+
+		var body struct {
+			URL               string `json:"url"`
+			IncludeTags       bool   `json:"includeTags"`
+			IncludeCategories bool   `json:"includeCategories"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		if body.URL != "https://recipes.example/chicken-tikka" || !body.IncludeTags || body.IncludeCategories {
+			t.Errorf("request body = %+v, want URL and includeTags=true/includeCategories=false", body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode("recipe-imported")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	got, err := client.ImportRecipeURL(context.Background(), ImportRecipeParams{
+		URL:               " https://recipes.example/chicken-tikka ",
+		IncludeTags:       true,
+		IncludeCategories: false,
+	})
+	if err != nil {
+		t.Fatalf("ImportRecipeURL() error = %v", err)
+	}
+	if got != "recipe-imported" {
+		t.Errorf("result = %q, want recipe-imported", got)
+	}
+}
+
+func TestImportRecipeURLValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent for invalid import URL")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "missing URL", want: "URL is required"},
+		{name: "unsupported scheme", url: "ftp://recipes.example/chicken", want: "http or https"},
+		{name: "missing host", url: "https:///chicken", want: "http or https"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.ImportRecipeURL(context.Background(), ImportRecipeParams{URL: tt.url})
+			if err == nil {
+				t.Fatal("ImportRecipeURL() error = nil, want error")
 			}
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("error = %q, want substring %q", err, tt.want)

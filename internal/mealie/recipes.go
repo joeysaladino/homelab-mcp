@@ -16,6 +16,13 @@ type RecipeSearchParams struct {
 	PerPage int
 }
 
+// ImportRecipeParams controls Mealie's URL-based recipe import.
+type ImportRecipeParams struct {
+	URL               string
+	IncludeTags       bool
+	IncludeCategories bool
+}
+
 // RecipePage is the paginated response returned by GET /api/recipes.
 type RecipePage struct {
 	Page       int             `json:"page"`
@@ -135,4 +142,36 @@ func (c *Client) GetRecipe(ctx context.Context, slugOrID string) (Recipe, error)
 		return Recipe{}, fmt.Errorf("get mealie recipe %q: %w", identifier, err)
 	}
 	return recipe, nil
+}
+
+// ImportRecipeURL asks Mealie to fetch and create a recipe from a public URL.
+// Mealie returns a response string rather than a recipe object.
+func (c *Client) ImportRecipeURL(ctx context.Context, params ImportRecipeParams) (string, error) {
+	sourceURL := strings.TrimSpace(params.URL)
+	if sourceURL == "" {
+		return "", fmt.Errorf("import mealie recipe: URL is required")
+	}
+	parsedURL, err := url.Parse(sourceURL)
+	if err != nil {
+		return "", fmt.Errorf("import mealie recipe: parse URL: %w", err)
+	}
+	if (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		return "", fmt.Errorf("import mealie recipe: URL must be an http or https URL with a host")
+	}
+
+	payload := struct {
+		IncludeTags       bool   `json:"includeTags"`
+		IncludeCategories bool   `json:"includeCategories"`
+		URL               string `json:"url"`
+	}{
+		IncludeTags:       params.IncludeTags,
+		IncludeCategories: params.IncludeCategories,
+		URL:               sourceURL,
+	}
+
+	var result string
+	if err := c.postJSON(ctx, "/api/recipes/create/url", payload, &result); err != nil {
+		return "", fmt.Errorf("import mealie recipe from URL: %w", err)
+	}
+	return result, nil
 }

@@ -16,6 +16,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const liveImportURL = "https://www.wholesomeyum.com/recipes/big-mac-salad-cheeseburger-salad-low-carb-gluten-free/"
+
 func TestStdioServerRecipeTools(t *testing.T) {
 	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
 		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
@@ -121,5 +123,135 @@ func TestStdioServerRecipeTools(t *testing.T) {
 	}
 	if len(detail.Ingredients) == 0 {
 		t.Error("detail ingredients are empty, want live recipe ingredients")
+	}
+}
+
+func TestStdioServerImportRecipeURL(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+	if os.Getenv("HOMELAB_MCP_LIVE_IMPORT") != "1" {
+		t.Skip("set HOMELAB_MCP_LIVE_IMPORT=1 to run the live write test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-import-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	searchResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.search_recipes",
+		Arguments: map[string]any{
+			"query": "wholesomeyum.com",
+			"limit": 50,
+			"page":  1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("check for existing imported recipe: %v", err)
+	}
+	if searchResult.IsError {
+		t.Fatalf("existing recipe check returned a tool error: %+v", searchResult.Content)
+	}
+
+	var existing mealietools.SearchRecipesOutput
+	searchStructured, err := json.Marshal(searchResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal existing recipe search: %v", err)
+	}
+	if err := json.Unmarshal(searchStructured, &existing); err != nil {
+		t.Fatalf("decode existing recipe search: %v", err)
+	}
+	for _, recipe := range existing.Recipes {
+		if recipe.SourceURL == liveImportURL {
+			t.Skipf("recipe already exists in Mealie as %q; skipping duplicate import", recipe.Slug)
+		}
+	}
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.import_recipe_url",
+		Arguments: map[string]any{
+			"url": liveImportURL,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.import_recipe_url: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("mealie.import_recipe_url returned a tool error: %+v", result.Content)
+	}
+
+	var output mealietools.ImportRecipeURLOutput
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal import result: %v", err)
+	}
+	if err := json.Unmarshal(structured, &output); err != nil {
+		t.Fatalf("decode import result: %v", err)
+	}
+	if !output.Created {
+		t.Fatal("import result created = false, want true")
+	}
+	if output.URL != liveImportURL {
+		t.Errorf("import URL = %q, want supplied URL", output.URL)
+	}
+	if output.MealieResult == "" {
+		t.Error("Mealie result is empty, want the API response string")
+	}
+
+	verifyResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.search_recipes",
+		Arguments: map[string]any{
+			"query": "big mac salad",
+			"limit": 50,
+			"page":  1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("verify imported recipe: %v", err)
+	}
+	if verifyResult.IsError {
+		t.Fatalf("import verification returned a tool error: %+v", verifyResult.Content)
+	}
+	var verified mealietools.SearchRecipesOutput
+	verifyStructured, err := json.Marshal(verifyResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal import verification: %v", err)
+	}
+	if err := json.Unmarshal(verifyStructured, &verified); err != nil {
+		t.Fatalf("decode import verification: %v", err)
+	}
+	found := false
+	for _, recipe := range verified.Recipes {
+		if recipe.SourceURL == liveImportURL {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("imported source URL was not found in follow-up search results")
 	}
 }

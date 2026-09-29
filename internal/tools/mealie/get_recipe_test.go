@@ -36,7 +36,7 @@ func TestGetRecipeToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(getter, getter)
+	mcpServer := server.New(getter, getter, getter)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,7 +93,7 @@ func TestGetRecipeToolOverMCP(t *testing.T) {
 func TestGetRecipeToolValidation(t *testing.T) {
 	getter := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(getter, getter)
+	mcpServer := server.New(getter, getter, getter)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
