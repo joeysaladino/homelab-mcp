@@ -74,3 +74,16 @@ HOMELAB_MCP_LIVE_IMPORT=1 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tag
 ```
 
 Run that command only when you intend to create the supplied recipe in Mealie.
+
+Meal-plan writes can be exercised with explicit environment values. The test
+checks for a matching entry first and skips duplicate writes:
+
+```sh
+set -a
+. ./.env
+set +a
+HOMELAB_MCP_LIVE_PLAN_DATE=2026-10-03 \
+HOMELAB_MCP_LIVE_PLAN_ENTRY_TYPE=breakfast \
+HOMELAB_MCP_LIVE_PLAN_RECIPE_ID=recipe-uuid \
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerCreateMealPlanEntry -count=1
+```

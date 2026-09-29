@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -203,6 +204,115 @@ func TestStdioServerMealPlan(t *testing.T) {
 	}
 	if !hasSimpleEntry {
 		t.Error("meal plan has no simple title/text entry")
+	}
+}
+
+func TestStdioServerCreateMealPlanEntry(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+	date := strings.TrimSpace(os.Getenv("HOMELAB_MCP_LIVE_PLAN_DATE"))
+	entryType := strings.TrimSpace(os.Getenv("HOMELAB_MCP_LIVE_PLAN_ENTRY_TYPE"))
+	title := strings.TrimSpace(os.Getenv("HOMELAB_MCP_LIVE_PLAN_TITLE"))
+	text := strings.TrimSpace(os.Getenv("HOMELAB_MCP_LIVE_PLAN_TEXT"))
+	recipeID := strings.TrimSpace(os.Getenv("HOMELAB_MCP_LIVE_PLAN_RECIPE_ID"))
+	if date == "" || entryType == "" || (title == "" && text == "" && recipeID == "") {
+		t.Skip("set HOMELAB_MCP_LIVE_PLAN_DATE, HOMELAB_MCP_LIVE_PLAN_ENTRY_TYPE, and meal content to run the live write test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-plan-write-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	existingResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.get_meal_plan",
+		Arguments: map[string]any{
+			"start_date": date,
+			"end_date":   date,
+		},
+	})
+	if err != nil {
+		t.Fatalf("check existing meal-plan entries: %v", err)
+	}
+	if existingResult.IsError {
+		t.Fatalf("existing meal-plan check returned a tool error: %+v", existingResult.Content)
+	}
+	var existing mealietools.GetMealPlanOutput
+	existingStructured, err := json.Marshal(existingResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal existing meal-plan result: %v", err)
+	}
+	if err := json.Unmarshal(existingStructured, &existing); err != nil {
+		t.Fatalf("decode existing meal-plan result: %v", err)
+	}
+	for _, entry := range existing.Entries {
+		if entry.EntryType != entryType || (recipeID != "" && entry.RecipeID != recipeID) || (title != "" && entry.Title != title) || (text != "" && entry.Text != text) {
+			continue
+		}
+		t.Skipf("matching meal-plan entry already exists with ID %d; skipping duplicate write", entry.ID)
+	}
+
+	arguments := map[string]any{
+		"date":       date,
+		"entry_type": entryType,
+	}
+	if title != "" {
+		arguments["title"] = title
+	}
+	if text != "" {
+		arguments["text"] = text
+	}
+	if recipeID != "" {
+		arguments["recipe_id"] = recipeID
+	}
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "mealie.create_meal_plan_entry",
+		Arguments: arguments,
+	})
+	if err != nil {
+		t.Fatalf("call mealie.create_meal_plan_entry: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("mealie.create_meal_plan_entry returned a tool error: %+v", result.Content)
+	}
+	var output mealietools.CreateMealPlanEntryOutput
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal created meal-plan result: %v", err)
+	}
+	if err := json.Unmarshal(structured, &output); err != nil {
+		t.Fatalf("decode created meal-plan result: %v", err)
+	}
+	if !output.Created || output.Entry.Date != date || output.Entry.EntryType != entryType {
+		t.Fatalf("created entry = %+v, want created %s %s entry", output.Entry, date, entryType)
+	}
+	if recipeID != "" && output.Entry.RecipeID != recipeID {
+		t.Errorf("created recipe ID = %q, want %q", output.Entry.RecipeID, recipeID)
 	}
 }
 
