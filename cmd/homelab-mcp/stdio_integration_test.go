@@ -126,6 +126,86 @@ func TestStdioServerRecipeTools(t *testing.T) {
 	}
 }
 
+func TestStdioServerMealPlan(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-meal-plan-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.get_meal_plan",
+		Arguments: map[string]any{
+			"start_date": "2026-09-28",
+			"end_date":   "2026-10-02",
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.get_meal_plan: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("mealie.get_meal_plan returned a tool error: %+v", result.Content)
+	}
+
+	var output mealietools.GetMealPlanOutput
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal meal-plan result: %v", err)
+	}
+	if err := json.Unmarshal(structured, &output); err != nil {
+		t.Fatalf("decode meal-plan result: %v", err)
+	}
+	if output.StartDate != "2026-09-28" || output.EndDate != "2026-10-02" {
+		t.Errorf("date range = %s through %s, want 2026-09-28 through 2026-10-02", output.StartDate, output.EndDate)
+	}
+	if output.Total == 0 || len(output.Entries) == 0 {
+		t.Fatalf("meal plan = total %d, entries %d; want live entries", output.Total, len(output.Entries))
+	}
+
+	hasRecipeBackedEntry := false
+	hasSimpleEntry := false
+	for _, entry := range output.Entries {
+		if entry.Recipe != nil {
+			hasRecipeBackedEntry = true
+		}
+		if entry.Recipe == nil && (entry.Title != "" || entry.Text != "") {
+			hasSimpleEntry = true
+		}
+	}
+	if !hasRecipeBackedEntry {
+		t.Error("meal plan has no recipe-backed entry")
+	}
+	if !hasSimpleEntry {
+		t.Error("meal plan has no simple title/text entry")
+	}
+}
+
 func TestStdioServerImportRecipeURL(t *testing.T) {
 	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
 		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")

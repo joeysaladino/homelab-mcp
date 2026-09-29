@@ -51,6 +51,15 @@ set +a
 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerRecipeTools -count=1
 ```
 
+The read-only meal-plan check uses the proof-of-concept date range:
+
+```sh
+set -a
+. ./.env
+set +a
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerMealPlan -count=1
+```
+
 The integration test is excluded from normal test runs so local development
 does not depend on network access or a live homelab.
 
