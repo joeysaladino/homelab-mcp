@@ -90,6 +90,117 @@ func TestSearchRecipes(t *testing.T) {
 	}
 }
 
+func TestGetRecipe(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want %s", r.Method, http.MethodGet)
+		}
+		if r.URL.Path != "/api/recipes/chicken-tikka" {
+			t.Errorf("path = %s, want /api/recipes/chicken-tikka", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+            "id": "recipe-id",
+            "name": "Chicken Tikka",
+            "slug": "chicken-tikka",
+            "description": "A weeknight recipe",
+            "orgURL": "https://recipes.example/chicken-tikka",
+            "prepTime": "PT15M",
+            "cookTime": "PT20M",
+            "totalTime": "PT35M",
+            "recipeServings": 4,
+            "recipeYieldQuantity": 4,
+            "recipeYield": "servings",
+            "recipeIngredient": [
+                {
+                    "quantity": 0.0,
+                    "unit": null,
+                    "food": null,
+                    "note": "1 teaspoon ground cumin",
+                    "display": "1 teaspoon ground cumin",
+                    "originalText": null
+                },
+                {
+                    "quantity": 2.0,
+                    "unit": {"id": "unit-id", "name": "cup", "abbreviation": "c"},
+                    "food": {"id": "food-id", "name": "rice"},
+                    "note": null,
+                    "display": "2 cups rice",
+                    "originalText": "2 cups rice"
+                }
+            ],
+            "recipeInstructions": [{
+                "id": "step-id",
+                "title": "",
+                "summary": "",
+                "text": "Cook the rice."
+            }]
+        }`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	got, err := client.GetRecipe(context.Background(), " chicken-tikka ")
+	if err != nil {
+		t.Fatalf("GetRecipe() error = %v", err)
+	}
+
+	if got.ID != "recipe-id" || got.Name != "Chicken Tikka" || got.Slug != "chicken-tikka" {
+		t.Fatalf("recipe identity = %+v, want recipe-id/Chicken Tikka/chicken-tikka", got)
+	}
+	if got.PrepTime != "PT15M" || got.CookTime != "PT20M" || got.TotalTime != "PT35M" {
+		t.Errorf("times = prep %q/cook %q/total %q, want PT15M/PT20M/PT35M", got.PrepTime, got.CookTime, got.TotalTime)
+	}
+	if len(got.Ingredients) != 2 {
+		t.Fatalf("ingredients length = %d, want 2", len(got.Ingredients))
+	}
+	if got.Ingredients[0].Display != "1 teaspoon ground cumin" || got.Ingredients[0].Unit != nil || got.Ingredients[0].Food != nil {
+		t.Errorf("unstructured ingredient = %+v, want display text with nil unit and food", got.Ingredients[0])
+	}
+	if got.Ingredients[0].Quantity == nil || *got.Ingredients[0].Quantity != 0 {
+		t.Errorf("unstructured quantity = %v, want pointer to zero", got.Ingredients[0].Quantity)
+	}
+	if got.Ingredients[1].Quantity == nil || *got.Ingredients[1].Quantity != 2 || got.Ingredients[1].Unit.Name != "cup" || got.Ingredients[1].Food.Name != "rice" {
+		t.Errorf("structured ingredient = %+v, want quantity 2/cup/rice", got.Ingredients[1])
+	}
+	if len(got.Instructions) != 1 || got.Instructions[0].Text != "Cook the rice." {
+		t.Errorf("instructions = %+v, want one cooking step", got.Instructions)
+	}
+}
+
+func TestGetRecipeValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent for invalid recipe identifier")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	tests := []struct {
+		name       string
+		identifier string
+		want       string
+	}{
+		{name: "missing identifier", want: "slug or id is required"},
+		{name: "path separator", identifier: "recipes/chicken", want: "invalid path character"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.GetRecipe(context.Background(), tt.identifier)
+			if err == nil {
+				t.Fatal("GetRecipe() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestSearchRecipesValidation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("request should not be sent for invalid parameters")

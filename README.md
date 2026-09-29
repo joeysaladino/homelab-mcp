@@ -11,7 +11,8 @@ The initial milestone is intentionally narrow:
 
 - typed configuration for the Mealie URL and server-side token;
 - a typed, read-only Mealie API client;
-- one curated MCP tool: `mealie.search_recipes`;
+- two curated read-only MCP tools: `mealie.search_recipes` and
+  `mealie.get_recipe`;
 - tests using an in-memory HTTP server and MCP transport.
 
 Write operations, pantry state, shopping-list synthesis, authentication, and
@@ -47,7 +48,7 @@ calls `mealie.search_recipes` against the configured Mealie instance:
 set -a
 . ./.env
 set +a
-GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerSearchRecipes -count=1
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerRecipeTools -count=1
 ```
 
 The integration test is excluded from normal test runs so local development

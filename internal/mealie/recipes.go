@@ -37,6 +37,59 @@ type RecipeSummary struct {
 	OrgURL      string `json:"orgURL"`
 }
 
+// Recipe is the detail projection returned by GET /api/recipes/{slug}. It is
+// intentionally limited to fields the MCP layer can use for recipe selection,
+// meal planning, and future ingredient processing.
+type Recipe struct {
+	ID                  string              `json:"id"`
+	Name                string              `json:"name"`
+	Slug                string              `json:"slug"`
+	Description         string              `json:"description"`
+	OrgURL              string              `json:"orgURL"`
+	PrepTime            string              `json:"prepTime"`
+	CookTime            string              `json:"cookTime"`
+	PerformTime         string              `json:"performTime"`
+	TotalTime           string              `json:"totalTime"`
+	RecipeServings      float64             `json:"recipeServings"`
+	RecipeYieldQuantity float64             `json:"recipeYieldQuantity"`
+	RecipeYield         string              `json:"recipeYield"`
+	Ingredients         []RecipeIngredient  `json:"recipeIngredient"`
+	Instructions        []RecipeInstruction `json:"recipeInstructions"`
+}
+
+// RecipeIngredient represents both Mealie's parsed fields and its fallback
+// human-readable fields. Imported recipes commonly populate Display or Note
+// while leaving Food, Unit, and Quantity unstructured.
+type RecipeIngredient struct {
+	Quantity     *float64        `json:"quantity"`
+	Unit         *IngredientUnit `json:"unit"`
+	Food         *IngredientFood `json:"food"`
+	Note         *string         `json:"note"`
+	Display      string          `json:"display"`
+	OriginalText *string         `json:"originalText"`
+}
+
+// IngredientUnit is the small unit projection needed by recipe consumers.
+type IngredientUnit struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Abbreviation string `json:"abbreviation"`
+}
+
+// IngredientFood is the small food projection needed by recipe consumers.
+type IngredientFood struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// RecipeInstruction is one ordered instruction step from a Mealie recipe.
+type RecipeInstruction struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
+	Text    string `json:"text"`
+}
+
 // SearchRecipes searches the existing Mealie recipe library.
 func (c *Client) SearchRecipes(ctx context.Context, params RecipeSearchParams) (RecipePage, error) {
 	search := strings.TrimSpace(params.Query)
@@ -64,4 +117,22 @@ func (c *Client) SearchRecipes(ctx context.Context, params RecipeSearchParams) (
 		return RecipePage{}, fmt.Errorf("search mealie recipes: %w", err)
 	}
 	return page, nil
+}
+
+// GetRecipe retrieves one recipe by its Mealie slug or UUID.
+func (c *Client) GetRecipe(ctx context.Context, slugOrID string) (Recipe, error) {
+	identifier := strings.TrimSpace(slugOrID)
+	if identifier == "" {
+		return Recipe{}, fmt.Errorf("get mealie recipe: slug or id is required")
+	}
+	if strings.ContainsAny(identifier, `/\\?#`) {
+		return Recipe{}, fmt.Errorf("get mealie recipe: slug or id contains an invalid path character")
+	}
+
+	var recipe Recipe
+	resource := "/api/recipes/" + identifier
+	if err := c.getJSON(ctx, resource, nil, &recipe); err != nil {
+		return Recipe{}, fmt.Errorf("get mealie recipe %q: %w", identifier, err)
+	}
+	return recipe, nil
 }

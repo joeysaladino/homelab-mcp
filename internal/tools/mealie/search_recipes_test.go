@@ -27,7 +27,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher)
+	mcpServer := server.New(searcher, searcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -81,7 +81,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 func TestSearchRecipesToolValidation(t *testing.T) {
 	searcher := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher)
+	mcpServer := server.New(searcher, searcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -133,6 +133,7 @@ func TestSearchRecipesToolValidation(t *testing.T) {
 
 type fakeRecipeSearcher struct {
 	page   mealieapi.RecipePage
+	recipe mealieapi.Recipe
 	got    mealieapi.RecipeSearchParams
 	called bool
 	err    error
@@ -142,6 +143,10 @@ func (f *fakeRecipeSearcher) SearchRecipes(_ context.Context, params mealieapi.R
 	f.called = true
 	f.got = params
 	return f.page, f.err
+}
+
+func (f *fakeRecipeSearcher) GetRecipe(_ context.Context, _ string) (mealieapi.Recipe, error) {
+	return f.recipe, f.err
 }
 
 func contentText(t *testing.T, content mcp.Content) string {

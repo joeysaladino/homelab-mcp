@@ -16,7 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestStdioServerSearchRecipes(t *testing.T) {
+func TestStdioServerRecipeTools(t *testing.T) {
 	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
 		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
 	}
@@ -87,5 +87,39 @@ func TestStdioServerSearchRecipes(t *testing.T) {
 	}
 	if len(output.Recipes) == 0 {
 		t.Fatal("recipes = [], want at least one live Mealie result")
+	}
+	if output.Recipes[0].Slug == "" {
+		t.Fatal("first recipe slug is empty, cannot exercise detail lookup")
+	}
+
+	detailResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.get_recipe",
+		Arguments: map[string]any{
+			"recipe_id_or_slug": output.Recipes[0].Slug,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.get_recipe: %v", err)
+	}
+	if detailResult.IsError {
+		t.Fatalf("mealie.get_recipe returned a tool error: %+v", detailResult.Content)
+	}
+
+	var detail mealietools.GetRecipeOutput
+	detailStructured, err := json.Marshal(detailResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured recipe detail: %v", err)
+	}
+	if err := json.Unmarshal(detailStructured, &detail); err != nil {
+		t.Fatalf("decode structured recipe detail: %v", err)
+	}
+	if detail.Slug != output.Recipes[0].Slug {
+		t.Errorf("detail slug = %q, want %q", detail.Slug, output.Recipes[0].Slug)
+	}
+	if detail.Name == "" {
+		t.Error("detail name is empty, want a live recipe name")
+	}
+	if len(detail.Ingredients) == 0 {
+		t.Error("detail ingredients are empty, want live recipe ingredients")
 	}
 }
