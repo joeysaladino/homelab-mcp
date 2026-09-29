@@ -1,0 +1,14 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+config/*.local.yaml
+
+# Go build/test artifacts
+/homelab-mcp
+bin/
+dist/
+coverage.out
+
+# macOS
+.DS_Store
