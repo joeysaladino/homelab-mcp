@@ -46,7 +46,7 @@ func TestGetMealPlanToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(reader, reader, reader, reader, reader)
+	mcpServer := server.New(mealietools.NewModule(reader))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -106,7 +106,7 @@ func TestGetMealPlanToolOverMCP(t *testing.T) {
 func TestGetMealPlanToolValidation(t *testing.T) {
 	reader := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(reader, reader, reader, reader, reader)
+	mcpServer := server.New(mealietools.NewModule(reader))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

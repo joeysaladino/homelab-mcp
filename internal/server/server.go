@@ -2,7 +2,6 @@
 package server
 
 import (
-	"github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -11,16 +10,25 @@ const (
 	Version = "0.1.0"
 )
 
-// New creates the MCP server and registers the currently supported tools.
-func New(recipeSearcher mealie.RecipeSearcher, recipeGetter mealie.RecipeGetter, recipeImporter mealie.RecipeImporter, mealPlanReader mealie.MealPlanReader, mealPlanWriter mealie.MealPlanWriter) *mcp.Server {
+// Module registers one integration's MCP tools with the application server.
+// Vikunja and future integrations can implement this without changing server
+// assembly.
+type Module interface {
+	RegisterTools(*mcp.Server)
+}
+
+// New creates the MCP server and registers the supplied integration modules in
+// order.
+func New(modules ...Module) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    Name,
 		Version: Version,
 	}, nil)
-	mealie.RegisterSearchRecipes(server, recipeSearcher)
-	mealie.RegisterGetRecipe(server, recipeGetter)
-	mealie.RegisterImportRecipeURL(server, recipeImporter)
-	mealie.RegisterGetMealPlan(server, mealPlanReader)
-	mealie.RegisterCreateMealPlanEntry(server, mealPlanWriter)
+	for _, module := range modules {
+		if module == nil {
+			panic("create MCP server: nil module")
+		}
+		module.RegisterTools(server)
+	}
 	return server
 }

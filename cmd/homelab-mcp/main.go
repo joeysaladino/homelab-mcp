@@ -11,6 +11,7 @@ import (
 	"github.com/joeysaladino/homelab-mcp/internal/config"
 	"github.com/joeysaladino/homelab-mcp/internal/mealie"
 	"github.com/joeysaladino/homelab-mcp/internal/server"
+	mealietools "github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -34,7 +35,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mcpServer := server.New(mealieClient, mealieClient, mealieClient, mealieClient, mealieClient)
+	mcpServer := server.New(mealietools.NewModule(mealieClient))
 	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("run MCP server", "error", err)
 		os.Exit(1)

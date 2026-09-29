@@ -18,6 +18,10 @@ The initial milestone is intentionally narrow:
 Destructive operations, pantry state, shopping-list synthesis, authentication,
 and observability will be added in later slices.
 
+Integration tools are registered as modules. The application server accepts
+generic modules, while each service owns its tool registration; adding a
+future Vikunja module will not require expanding the server constructor.
+
 ## Local development
 
 Keep local credentials in an ignored `.env` file, then export them only to the

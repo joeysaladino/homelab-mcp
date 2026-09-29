@@ -14,7 +14,7 @@ import (
 func TestImportRecipeURLToolOverMCP(t *testing.T) {
 	importer := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(importer, importer, importer, importer, importer)
+	mcpServer := server.New(mealietools.NewModule(importer))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -69,7 +69,7 @@ func TestImportRecipeURLToolOverMCP(t *testing.T) {
 func TestImportRecipeURLToolValidation(t *testing.T) {
 	importer := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(importer, importer, importer, importer, importer)
+	mcpServer := server.New(mealietools.NewModule(importer))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

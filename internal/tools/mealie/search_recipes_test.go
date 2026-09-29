@@ -27,7 +27,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher, searcher, searcher, searcher, searcher)
+	mcpServer := server.New(mealietools.NewModule(searcher))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -81,7 +81,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 func TestSearchRecipesToolValidation(t *testing.T) {
 	searcher := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher, searcher, searcher, searcher, searcher)
+	mcpServer := server.New(mealietools.NewModule(searcher))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
