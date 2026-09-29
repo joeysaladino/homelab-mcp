@@ -12,7 +12,7 @@ const (
 )
 
 // New creates the MCP server and registers the currently supported tools.
-func New(recipeSearcher mealie.RecipeSearcher, recipeGetter mealie.RecipeGetter, recipeImporter mealie.RecipeImporter, mealPlanReader mealie.MealPlanReader) *mcp.Server {
+func New(recipeSearcher mealie.RecipeSearcher, recipeGetter mealie.RecipeGetter, recipeImporter mealie.RecipeImporter, mealPlanReader mealie.MealPlanReader, mealPlanWriter mealie.MealPlanWriter) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    Name,
 		Version: Version,
@@ -21,5 +21,6 @@ func New(recipeSearcher mealie.RecipeSearcher, recipeGetter mealie.RecipeGetter,
 	mealie.RegisterGetRecipe(server, recipeGetter)
 	mealie.RegisterImportRecipeURL(server, recipeImporter)
 	mealie.RegisterGetMealPlan(server, mealPlanReader)
+	mealie.RegisterCreateMealPlanEntry(server, mealPlanWriter)
 	return server
 }

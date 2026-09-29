@@ -147,28 +147,32 @@ func getMealPlanHandler(reader MealPlanReader) mcp.ToolHandlerFor[GetMealPlanInp
 		}
 
 		for _, entry := range page.Items {
-			result := GetMealPlanEntry{
-				ID:        entry.ID,
-				Date:      string(entry.Date),
-				EntryType: entry.EntryType,
-				Title:     entry.Title,
-				Text:      entry.Text,
-			}
-			if entry.RecipeID != nil {
-				result.RecipeID = strings.TrimSpace(*entry.RecipeID)
-			}
-			if entry.Recipe != nil {
-				result.Recipe = &GetMealPlanRecipe{
-					ID:          entry.Recipe.ID,
-					Name:        entry.Recipe.Name,
-					Slug:        entry.Recipe.Slug,
-					Description: entry.Recipe.Description,
-					SourceURL:   entry.Recipe.OrgURL,
-				}
-			}
-			output.Entries = append(output.Entries, result)
+			output.Entries = append(output.Entries, mealPlanEntryOutput(entry))
 		}
 
 		return nil, output, nil
 	}
+}
+
+func mealPlanEntryOutput(entry mealieapi.MealPlanEntry) GetMealPlanEntry {
+	result := GetMealPlanEntry{
+		ID:        entry.ID,
+		Date:      string(entry.Date),
+		EntryType: string(entry.EntryType),
+		Title:     entry.Title,
+		Text:      entry.Text,
+	}
+	if entry.RecipeID != nil {
+		result.RecipeID = strings.TrimSpace(*entry.RecipeID)
+	}
+	if entry.Recipe != nil {
+		result.Recipe = &GetMealPlanRecipe{
+			ID:          entry.Recipe.ID,
+			Name:        entry.Recipe.Name,
+			Slug:        entry.Recipe.Slug,
+			Description: entry.Recipe.Description,
+			SourceURL:   entry.Recipe.OrgURL,
+		}
+	}
+	return result
 }

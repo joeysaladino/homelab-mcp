@@ -15,6 +15,29 @@ const mealPlanDateLayout = "2006-01-02"
 // does not carry a time zone because meal-plan entries are date-only values.
 type Date string
 
+// PlanEntryType is one of Mealie's supported meal-plan categories.
+type PlanEntryType string
+
+const (
+	PlanEntryBreakfast PlanEntryType = "breakfast"
+	PlanEntryLunch     PlanEntryType = "lunch"
+	PlanEntryDinner    PlanEntryType = "dinner"
+	PlanEntrySide      PlanEntryType = "side"
+	PlanEntrySnack     PlanEntryType = "snack"
+	PlanEntryDrink     PlanEntryType = "drink"
+	PlanEntryDessert   PlanEntryType = "dessert"
+)
+
+// Valid reports whether the plan entry type is supported by Mealie.
+func (t PlanEntryType) Valid() bool {
+	switch t {
+	case PlanEntryBreakfast, PlanEntryLunch, PlanEntryDinner, PlanEntrySide, PlanEntrySnack, PlanEntryDrink, PlanEntryDessert:
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseDate validates and normalizes an ISO-8601 calendar date.
 func ParseDate(value string) (Date, error) {
 	date := strings.TrimSpace(value)
@@ -46,6 +69,16 @@ type MealPlanQuery struct {
 	PerPage   int
 }
 
+// CreateMealPlanEntryParams describes an additive meal-plan write. RecipeID
+// may be nil for a simple meal represented by title and/or text.
+type CreateMealPlanEntryParams struct {
+	Date      Date
+	EntryType PlanEntryType
+	Title     string
+	Text      string
+	RecipeID  *string
+}
+
 // MealPlanPage is the paginated response returned by GET
 // /api/households/mealplans.
 type MealPlanPage struct {
@@ -62,7 +95,7 @@ type MealPlanPage struct {
 // nil for simple meals that have only title/text.
 type MealPlanEntry struct {
 	Date      Date           `json:"date"`
-	EntryType string         `json:"entryType"`
+	EntryType PlanEntryType  `json:"entryType"`
 	Title     string         `json:"title"`
 	Text      string         `json:"text"`
 	RecipeID  *string        `json:"recipeId"`
@@ -108,4 +141,38 @@ func (c *Client) GetMealPlan(ctx context.Context, params MealPlanQuery) (MealPla
 		return MealPlanPage{}, fmt.Errorf("get mealie meal plan: %w", err)
 	}
 	return page, nil
+}
+
+// CreateMealPlanEntry adds one recipe-backed or simple meal to Mealie's
+// household meal plan.
+func (c *Client) CreateMealPlanEntry(ctx context.Context, params CreateMealPlanEntryParams) (MealPlanEntry, error) {
+	if err := validateDate(params.Date, "date"); err != nil {
+		return MealPlanEntry{}, fmt.Errorf("create mealie meal-plan entry: %w", err)
+	}
+	if params.Date == "" {
+		return MealPlanEntry{}, fmt.Errorf("create mealie meal-plan entry: date is required")
+	}
+	if !params.EntryType.Valid() {
+		return MealPlanEntry{}, fmt.Errorf("create mealie meal-plan entry: unsupported entry type %q", params.EntryType)
+	}
+
+	payload := struct {
+		Date      Date          `json:"date"`
+		EntryType PlanEntryType `json:"entryType"`
+		Title     string        `json:"title"`
+		Text      string        `json:"text"`
+		RecipeID  *string       `json:"recipeId"`
+	}{
+		Date:      params.Date,
+		EntryType: params.EntryType,
+		Title:     strings.TrimSpace(params.Title),
+		Text:      strings.TrimSpace(params.Text),
+		RecipeID:  params.RecipeID,
+	}
+
+	var entry MealPlanEntry
+	if err := c.postJSON(ctx, "/api/households/mealplans", payload, &entry); err != nil {
+		return MealPlanEntry{}, fmt.Errorf("create mealie meal-plan entry: %w", err)
+	}
+	return entry, nil
 }

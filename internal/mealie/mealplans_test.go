@@ -174,3 +174,101 @@ func TestGetMealPlanIgnoresUnknownFields(t *testing.T) {
 		t.Fatalf("GetMealPlan() error = %v", err)
 	}
 }
+
+func TestCreateMealPlanEntry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/api/households/mealplans" {
+			t.Errorf("path = %s, want /api/households/mealplans", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+
+		var body struct {
+			Date      string        `json:"date"`
+			EntryType PlanEntryType `json:"entryType"`
+			Title     string        `json:"title"`
+			Text      string        `json:"text"`
+			RecipeID  *string       `json:"recipeId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		if body.Date != "2026-10-05" || body.EntryType != PlanEntryDinner || body.Title != "" || body.Text != "" || body.RecipeID == nil || *body.RecipeID != "recipe-id" {
+			t.Errorf("request body = %+v, want recipe-backed dinner entry", body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{
+            "date": "2026-10-05",
+            "entryType": "dinner",
+            "title": "",
+            "text": "",
+            "recipeId": "recipe-id",
+            "id": 456,
+            "groupId": "group-id",
+            "userId": "user-id",
+            "householdId": "household-id",
+            "recipe": {
+                "id": "recipe-id",
+                "name": "Chicken Tikka",
+                "slug": "chicken-tikka",
+                "description": "A weeknight recipe",
+                "orgURL": "https://recipes.example/chicken-tikka"
+            }
+        }`))
+	}))
+	defer server.Close()
+
+	recipeID := "recipe-id"
+	client := newTestClient(t, server.URL, "test-token")
+	got, err := client.CreateMealPlanEntry(context.Background(), CreateMealPlanEntryParams{
+		Date:      Date("2026-10-05"),
+		EntryType: PlanEntryDinner,
+		RecipeID:  &recipeID,
+	})
+	if err != nil {
+		t.Fatalf("CreateMealPlanEntry() error = %v", err)
+	}
+	if got.ID != 456 || got.Date != Date("2026-10-05") || got.EntryType != PlanEntryDinner || got.RecipeID == nil || got.Recipe == nil || got.Recipe.Name != "Chicken Tikka" {
+		t.Fatalf("created entry = %+v, want created recipe-backed entry", got)
+	}
+}
+
+func TestCreateMealPlanEntryValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent for invalid meal-plan entry")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	tests := []struct {
+		name   string
+		params CreateMealPlanEntryParams
+		want   string
+	}{
+		{name: "missing date", params: CreateMealPlanEntryParams{EntryType: PlanEntryDinner}, want: "date is required"},
+		{name: "invalid date", params: CreateMealPlanEntryParams{Date: Date("tomorrow"), EntryType: PlanEntryDinner}, want: "date must use YYYY-MM-DD"},
+		{name: "unsupported entry type", params: CreateMealPlanEntryParams{Date: Date("2026-10-05"), EntryType: PlanEntryType("supper")}, want: "unsupported entry type"},
+		{name: "missing entry type", params: CreateMealPlanEntryParams{Date: Date("2026-10-05")}, want: "unsupported entry type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.CreateMealPlanEntry(context.Background(), tt.params)
+			if err == nil {
+				t.Fatal("CreateMealPlanEntry() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}

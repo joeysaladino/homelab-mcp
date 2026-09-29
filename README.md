@@ -11,8 +11,8 @@ The initial milestone is intentionally narrow:
 
 - typed configuration for the Mealie URL and server-side token;
 - a typed Mealie API client with read operations and additive URL import;
-- two curated read-only MCP tools: `mealie.search_recipes` and
-  `mealie.get_recipe`;
+- curated recipe and meal-plan MCP tools, including read-only search/detail/
+  inspection plus additive recipe import and meal-plan entry creation;
 - tests using an in-memory HTTP server and MCP transport.
 
 Destructive operations, pantry state, shopping-list synthesis, authentication,

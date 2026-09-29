@@ -27,7 +27,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher, searcher, searcher, searcher)
+	mcpServer := server.New(searcher, searcher, searcher, searcher, searcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -81,7 +81,7 @@ func TestSearchRecipesToolOverMCP(t *testing.T) {
 func TestSearchRecipesToolValidation(t *testing.T) {
 	searcher := &fakeRecipeSearcher{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(searcher, searcher, searcher, searcher)
+	mcpServer := server.New(searcher, searcher, searcher, searcher, searcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -132,16 +132,19 @@ func TestSearchRecipesToolValidation(t *testing.T) {
 }
 
 type fakeRecipeSearcher struct {
-	page           mealieapi.RecipePage
-	recipe         mealieapi.Recipe
-	mealPlan       mealieapi.MealPlanPage
-	mealPlanParams mealieapi.MealPlanQuery
-	got            mealieapi.RecipeSearchParams
-	importParams   mealieapi.ImportRecipeParams
-	called         bool
-	importCalled   bool
-	mealPlanCalled bool
-	err            error
+	page                mealieapi.RecipePage
+	recipe              mealieapi.Recipe
+	mealPlan            mealieapi.MealPlanPage
+	mealPlanParams      mealieapi.MealPlanQuery
+	mealPlanEntry       mealieapi.MealPlanEntry
+	mealPlanWrite       mealieapi.CreateMealPlanEntryParams
+	got                 mealieapi.RecipeSearchParams
+	importParams        mealieapi.ImportRecipeParams
+	called              bool
+	importCalled        bool
+	mealPlanCalled      bool
+	mealPlanWriteCalled bool
+	err                 error
 }
 
 func (f *fakeRecipeSearcher) SearchRecipes(_ context.Context, params mealieapi.RecipeSearchParams) (mealieapi.RecipePage, error) {
@@ -164,6 +167,12 @@ func (f *fakeRecipeSearcher) GetMealPlan(_ context.Context, params mealieapi.Mea
 	f.mealPlanCalled = true
 	f.mealPlanParams = params
 	return f.mealPlan, f.err
+}
+
+func (f *fakeRecipeSearcher) CreateMealPlanEntry(_ context.Context, params mealieapi.CreateMealPlanEntryParams) (mealieapi.MealPlanEntry, error) {
+	f.mealPlanWriteCalled = true
+	f.mealPlanWrite = params
+	return f.mealPlanEntry, f.err
 }
 
 func contentText(t *testing.T, content mcp.Content) string {
