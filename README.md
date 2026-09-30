@@ -11,8 +11,9 @@ The initial milestone is intentionally narrow:
 
 - typed configuration for the Mealie URL and server-side token;
 - a typed Mealie API client with read operations and additive URL import;
-- curated recipe and meal-plan MCP tools, including read-only search/detail/
-  inspection plus additive recipe import and meal-plan entry creation;
+- curated recipe, meal-plan, and shopping-list MCP tools, including read-only
+  search/detail/inspection plus additive recipe import and meal-plan entry
+  creation;
 - tests using an in-memory HTTP server and MCP transport.
 
 Destructive operations, pantry state, shopping-list synthesis, authentication,
@@ -62,6 +63,16 @@ set -a
 . ./.env
 set +a
 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerMealPlan -count=1
+```
+
+The read-only shopping-list check discovers the first live list and retrieves
+its items:
+
+```sh
+set -a
+. ./.env
+set +a
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerShoppingLists -count=1
 ```
 
 The integration test is excluded from normal test runs so local development

@@ -207,6 +207,100 @@ func TestStdioServerMealPlan(t *testing.T) {
 	}
 }
 
+func TestStdioServerShoppingLists(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-shopping-list-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	listsResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.get_shopping_lists",
+		Arguments: map[string]any{
+			"limit": 50,
+			"page":  1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.get_shopping_lists: %v", err)
+	}
+	if listsResult.IsError {
+		t.Fatalf("mealie.get_shopping_lists returned a tool error: %+v", listsResult.Content)
+	}
+
+	var lists mealietools.GetShoppingListsOutput
+	listsStructured, err := json.Marshal(listsResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal shopping-list result: %v", err)
+	}
+	if err := json.Unmarshal(listsStructured, &lists); err != nil {
+		t.Fatalf("decode shopping-list result: %v", err)
+	}
+	if lists.Total == 0 || len(lists.Lists) == 0 {
+		t.Fatalf("shopping lists = total %d, returned %d; want a live list", lists.Total, len(lists.Lists))
+	}
+	if lists.Lists[0].ID == "" {
+		t.Fatal("first shopping-list ID is empty, cannot exercise detail lookup")
+	}
+
+	detailResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.get_shopping_list",
+		Arguments: map[string]any{
+			"shopping_list_id": lists.Lists[0].ID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.get_shopping_list: %v", err)
+	}
+	if detailResult.IsError {
+		t.Fatalf("mealie.get_shopping_list returned a tool error: %+v", detailResult.Content)
+	}
+
+	var detail mealietools.GetShoppingListOutput
+	detailStructured, err := json.Marshal(detailResult.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal shopping-list detail: %v", err)
+	}
+	if err := json.Unmarshal(detailStructured, &detail); err != nil {
+		t.Fatalf("decode shopping-list detail: %v", err)
+	}
+	if detail.ID != lists.Lists[0].ID {
+		t.Errorf("detail ID = %q, want %q", detail.ID, lists.Lists[0].ID)
+	}
+	if len(detail.Items) == 0 {
+		t.Fatal("shopping-list detail has no items, want live grocery items")
+	}
+	if detail.Items[0].Display == "" {
+		t.Error("first shopping-list item display is empty, want human-readable item text")
+	}
+}
+
 func TestStdioServerCreateMealPlanEntry(t *testing.T) {
 	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
 		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")

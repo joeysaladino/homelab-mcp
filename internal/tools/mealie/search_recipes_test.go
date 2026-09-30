@@ -138,12 +138,18 @@ type fakeRecipeSearcher struct {
 	mealPlanParams      mealieapi.MealPlanQuery
 	mealPlanEntry       mealieapi.MealPlanEntry
 	mealPlanWrite       mealieapi.CreateMealPlanEntryParams
+	shoppingLists       mealieapi.ShoppingListPage
+	shoppingList        mealieapi.ShoppingList
+	shoppingListQuery   mealieapi.ShoppingListQuery
+	shoppingListID      string
 	got                 mealieapi.RecipeSearchParams
 	importParams        mealieapi.ImportRecipeParams
 	called              bool
 	importCalled        bool
 	mealPlanCalled      bool
 	mealPlanWriteCalled bool
+	shoppingListsCalled bool
+	shoppingListCalled  bool
 	err                 error
 }
 
@@ -173,6 +179,18 @@ func (f *fakeRecipeSearcher) CreateMealPlanEntry(_ context.Context, params meali
 	f.mealPlanWriteCalled = true
 	f.mealPlanWrite = params
 	return f.mealPlanEntry, f.err
+}
+
+func (f *fakeRecipeSearcher) GetShoppingLists(_ context.Context, params mealieapi.ShoppingListQuery) (mealieapi.ShoppingListPage, error) {
+	f.shoppingListsCalled = true
+	f.shoppingListQuery = params
+	return f.shoppingLists, f.err
+}
+
+func (f *fakeRecipeSearcher) GetShoppingList(_ context.Context, listID string) (mealieapi.ShoppingList, error) {
+	f.shoppingListCalled = true
+	f.shoppingListID = listID
+	return f.shoppingList, f.err
 }
 
 func contentText(t *testing.T, content mcp.Content) string {
