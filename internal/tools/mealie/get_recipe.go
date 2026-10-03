@@ -108,13 +108,7 @@ func getRecipeHandler(getter RecipeGetter) mcp.ToolHandlerFor[GetRecipeInput, Ge
 		}
 
 		for _, ingredient := range recipe.Ingredients {
-			text := strings.TrimSpace(ingredient.Display)
-			if text == "" && ingredient.Note != nil {
-				text = strings.TrimSpace(*ingredient.Note)
-			}
-			if text == "" && ingredient.OriginalText != nil {
-				text = strings.TrimSpace(*ingredient.OriginalText)
-			}
+			text := ingredient.HumanText()
 
 			result := GetRecipeIngredient{Text: text}
 			if ingredient.Note != nil {

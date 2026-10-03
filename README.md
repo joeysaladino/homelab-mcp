@@ -13,9 +13,9 @@ The initial milestone is intentionally narrow:
 - versioned, human-editable pantry configuration with inventory states;
 - versioned, human-editable shopping-trip configuration;
 - a typed Mealie API client with read operations and additive URL import;
-- curated recipe, meal-plan, and shopping-list MCP tools, including read-only
-  search/detail/inspection plus additive recipe import and meal-plan entry
-  creation;
+- curated recipe, meal-plan, shopping-list, and grocery-draft MCP tools,
+  including read-only search/detail/inspection plus additive recipe import and
+  meal-plan entry creation;
 - tests using an in-memory HTTP server and MCP transport.
 
 Destructive operations, shopping-list synthesis, authentication, and
@@ -45,13 +45,14 @@ application logs use stderr.
 The default pantry file is `config/pantry.yaml`. Override its location with
 `PANTRY_FILE` when running in Docker or Kubernetes. Each item supports the
 states `have`, `low`, `out`, and `unknown`; omitted state defaults to `have`.
-The server validates this file during startup, but pantry data is not yet used
-to generate shopping lists.
+The server validates this file during startup. The read-only draft tool
+includes this pantry context, but does not yet subtract ingredients or create
+final shopping lists.
 
 The default shopping-trip file is `config/shopping.yaml`; override it with
 `SHOPPING_FILE`. Trips are named weekday groups. Unassigned weekdays are
-allowed and will be reported by the future grocery-draft workflow instead of
-being silently assigned to a run.
+allowed and are reported by the grocery-draft workflow instead of being
+silently assigned to a run.
 
 ## Testing
 
@@ -88,6 +89,16 @@ set -a
 . ./.env
 set +a
 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerShoppingLists -count=1
+```
+
+The read-only grocery-draft check combines the live meal plan and recipes with
+the configured pantry and shopping-trip context:
+
+```sh
+set -a
+. ./.env
+set +a
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerPrepareShoppingDraft -count=1
 ```
 
 The integration test is excluded from normal test runs so local development

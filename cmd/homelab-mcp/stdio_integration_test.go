@@ -14,6 +14,7 @@ import (
 	"time"
 
 	mealietools "github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
+	shoppingtools "github.com/joeysaladino/homelab-mcp/internal/tools/shopping"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -298,6 +299,84 @@ func TestStdioServerShoppingLists(t *testing.T) {
 	}
 	if detail.Items[0].Display == "" {
 		t.Error("first shopping-list item display is empty, want human-readable item text")
+	}
+}
+
+func TestStdioServerPrepareShoppingDraft(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-shopping-draft-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.prepare_shopping_draft",
+		Arguments: map[string]any{
+			"start_date": "2026-09-28",
+			"end_date":   "2026-10-03",
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.prepare_shopping_draft: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("mealie.prepare_shopping_draft returned a tool error: %+v", result.Content)
+	}
+
+	var output shoppingtools.PrepareShoppingDraftOutput
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal shopping-draft result: %v", err)
+	}
+	if err := json.Unmarshal(structured, &output); err != nil {
+		t.Fatalf("decode shopping-draft result: %v", err)
+	}
+	if output.StartDate != "2026-09-28" || output.EndDate != "2026-10-03" {
+		t.Errorf("date range = %s through %s, want 2026-09-28 through 2026-10-03", output.StartDate, output.EndDate)
+	}
+	if len(output.Pantry) == 0 {
+		t.Error("pantry context is empty, want configured pantry items")
+	}
+	mealCount := 0
+	ingredientCount := 0
+	for _, trip := range output.Trips {
+		mealCount += len(trip.Meals)
+		for _, meal := range trip.Meals {
+			ingredientCount += len(meal.Ingredients)
+		}
+	}
+	mealCount += len(output.UnassignedMeals)
+	if mealCount == 0 {
+		t.Fatal("shopping draft has no meals, want live meal-plan entries")
+	}
+	if ingredientCount == 0 {
+		t.Fatal("shopping draft has no recipe ingredients, want live recipe expansion")
 	}
 }
 

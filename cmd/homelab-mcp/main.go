@@ -14,6 +14,7 @@ import (
 	"github.com/joeysaladino/homelab-mcp/internal/server"
 	shoppingconfig "github.com/joeysaladino/homelab-mcp/internal/shopping"
 	mealietools "github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
+	shoppingtools "github.com/joeysaladino/homelab-mcp/internal/tools/shopping"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -48,10 +49,15 @@ func main() {
 	}
 	slog.Info("loaded shopping-trip configuration", "path", cfg.ShoppingFile, "trips", len(shoppingPlan.Trips))
 
+	shoppingPlanner := shoppingconfig.NewPlanner(mealieClient, mealieClient, pantryContext, shoppingPlan)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mcpServer := server.New(mealietools.NewModule(mealieClient))
+	mcpServer := server.New(
+		mealietools.NewModule(mealieClient),
+		shoppingtools.NewModule(shoppingPlanner),
+	)
 	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("run MCP server", "error", err)
 		os.Exit(1)

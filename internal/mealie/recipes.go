@@ -76,6 +76,26 @@ type RecipeIngredient struct {
 	OriginalText *string         `json:"originalText"`
 }
 
+// HumanText returns the best human-readable representation of an ingredient.
+// Imported recipes may leave parsed fields empty, so display/note/originalText
+// are intentionally preferred over assuming Food and Unit are populated.
+func (i RecipeIngredient) HumanText() string {
+	if text := strings.TrimSpace(i.Display); text != "" {
+		return text
+	}
+	if i.Note != nil {
+		if text := strings.TrimSpace(*i.Note); text != "" {
+			return text
+		}
+	}
+	if i.OriginalText != nil {
+		if text := strings.TrimSpace(*i.OriginalText); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
 // IngredientUnit is the small unit projection needed by recipe consumers.
 type IngredientUnit struct {
 	ID           string `json:"id"`
