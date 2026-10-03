@@ -380,6 +380,77 @@ func TestStdioServerPrepareShoppingDraft(t *testing.T) {
 	}
 }
 
+func TestStdioServerApplyShoppingListsPreview(t *testing.T) {
+	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
+		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() could not locate the integration test")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "../.."))
+
+	command := exec.Command("go", "run", "./cmd/homelab-mcp")
+	command.Dir = repoRoot
+	command.Stderr = os.Stderr
+
+	transport := &mcp.CommandTransport{Command: command}
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "homelab-mcp-shopping-preview-integration-test",
+		Version: "0.1.0",
+	}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connect to stdio server: %v", err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close MCP session: %v", err)
+		}
+	}()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "mealie.apply_shopping_lists",
+		Arguments: map[string]any{
+			"confirm": false,
+			"trips": []any{map[string]any{
+				"name": "Preview Only",
+				"items": []any{map[string]any{
+					"display": "ground cumin — check pantry",
+				}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("call mealie.apply_shopping_lists: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("mealie.apply_shopping_lists returned a tool error: %+v", result.Content)
+	}
+
+	var output shoppingtools.ApplyShoppingListsOutput
+	structured, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal shopping-list preview: %v", err)
+	}
+	if err := json.Unmarshal(structured, &output); err != nil {
+		t.Fatalf("decode shopping-list preview: %v", err)
+	}
+	if output.Applied || !output.ConfirmationRequired || output.TotalItems != 1 {
+		t.Fatalf("preview output = %+v, want no-write preview with one item", output)
+	}
+	if len(output.Lists) != 1 || output.Lists[0].ID != "" || output.Lists[0].Name != "Preview Only" {
+		t.Fatalf("preview lists = %+v, want one list without an ID", output.Lists)
+	}
+	if len(output.Lists[0].Items) != 1 || output.Lists[0].Items[0].Display != "ground cumin — check pantry" {
+		t.Fatalf("preview items = %+v, want supplied grocery text", output.Lists[0].Items)
+	}
+}
+
 func TestStdioServerCreateShoppingList(t *testing.T) {
 	if os.Getenv("MEALIE_URL") == "" || os.Getenv("MEALIE_TOKEN") == "" {
 		t.Skip("MEALIE_URL and MEALIE_TOKEN are required for the integration test")

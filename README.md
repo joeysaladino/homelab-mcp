@@ -128,6 +128,20 @@ set +a
 GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerPrepareShoppingDraft -count=1
 ```
 
+The confirmed-apply tool can be exercised safely through the real stdio server
+with its no-write preview mode:
+
+```sh
+set -a
+. ./.env
+set +a
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerApplyShoppingListsPreview -count=1
+```
+
+This validates server startup, MCP registration, schema decoding, draft
+normalization, and the `confirm: false` safety boundary without creating a
+Mealie list or item.
+
 The integration test is excluded from normal test runs so local development
 does not depend on network access or a live homelab.
 
