@@ -27,5 +27,7 @@ COPY --from=build /src/config /app/config
 ENV PANTRY_FILE=/app/config/pantry.yaml \
 	SHOPPING_FILE=/app/config/shopping.yaml
 
+EXPOSE 8080
+
 USER nonroot:nonroot
 ENTRYPOINT ["/app/homelab-mcp"]

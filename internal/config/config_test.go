@@ -25,6 +25,8 @@ func TestLoadFromEnv(t *testing.T) {
 				},
 				PantryFile:   DefaultPantryFile,
 				ShoppingFile: DefaultShoppingFile,
+				Transport:    DefaultTransport,
+				HTTPAddr:     DefaultHTTPAddr,
 			},
 		},
 		{
@@ -80,6 +82,12 @@ func TestLoadFromEnv(t *testing.T) {
 				if got.ShoppingFile != tt.want.ShoppingFile {
 					t.Errorf("ShoppingFile = %q, want %q", got.ShoppingFile, tt.want.ShoppingFile)
 				}
+				if got.Transport != tt.want.Transport {
+					t.Errorf("Transport = %q, want %q", got.Transport, tt.want.Transport)
+				}
+				if got.HTTPAddr != tt.want.HTTPAddr {
+					t.Errorf("HTTPAddr = %q, want %q", got.HTTPAddr, tt.want.HTTPAddr)
+				}
 				return
 			}
 
@@ -108,6 +116,35 @@ func TestLoadFromEnvPantryFileOverride(t *testing.T) {
 	}
 	if got.ShoppingFile != "/etc/homelab-mcp/shopping.yaml" {
 		t.Errorf("ShoppingFile = %q, want trimmed override", got.ShoppingFile)
+	}
+}
+
+func TestLoadFromEnvHTTPTransport(t *testing.T) {
+	got, err := LoadFromEnv(mapLookup(map[string]string{
+		"MEALIE_URL":    "https://mealie.example.test",
+		"MEALIE_TOKEN":  "secret-token",
+		"MCP_TRANSPORT": " HTTP ",
+		"MCP_HTTP_ADDR": " 127.0.0.1:9090 ",
+	}))
+	if err != nil {
+		t.Fatalf("LoadFromEnv() error = %v", err)
+	}
+	if got.Transport != TransportHTTP {
+		t.Errorf("Transport = %q, want %q", got.Transport, TransportHTTP)
+	}
+	if got.HTTPAddr != "127.0.0.1:9090" {
+		t.Errorf("HTTPAddr = %q, want trimmed override", got.HTTPAddr)
+	}
+}
+
+func TestLoadFromEnvInvalidTransport(t *testing.T) {
+	_, err := LoadFromEnv(mapLookup(map[string]string{
+		"MEALIE_URL":    "https://mealie.example.test",
+		"MEALIE_TOKEN":  "secret-token",
+		"MCP_TRANSPORT": "websocket",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "MCP_TRANSPORT must be") {
+		t.Fatalf("LoadFromEnv() error = %v, want invalid transport error", err)
 	}
 }
 

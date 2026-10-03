@@ -16,11 +16,29 @@ const DefaultPantryFile = "config/pantry.yaml"
 // SHOPPING_FILE is not set.
 const DefaultShoppingFile = "config/shopping.yaml"
 
+// Transport selects how the MCP server accepts client connections.
+type Transport string
+
+const (
+	TransportStdio Transport = "stdio"
+	TransportHTTP  Transport = "http"
+)
+
+const (
+	// DefaultTransport keeps local development compatible with MCP clients
+	// that launch the server as a subprocess.
+	DefaultTransport = TransportStdio
+	// DefaultHTTPAddr is suitable for a container behind a reverse proxy.
+	DefaultHTTPAddr = ":8080"
+)
+
 // Config contains configuration for the application.
 type Config struct {
 	Mealie       MealieConfig
 	PantryFile   string
 	ShoppingFile string
+	Transport    Transport
+	HTTPAddr     string
 }
 
 // MealieConfig contains the connection details for Mealie.
@@ -73,6 +91,19 @@ func LoadFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		shoppingFile = strings.TrimSpace(rawShoppingFile)
 	}
 
+	transport := DefaultTransport
+	if rawTransport, ok := lookup("MCP_TRANSPORT"); ok && strings.TrimSpace(rawTransport) != "" {
+		transport = Transport(strings.ToLower(strings.TrimSpace(rawTransport)))
+	}
+	if transport != TransportStdio && transport != TransportHTTP {
+		return Config{}, fmt.Errorf("load config: MCP_TRANSPORT must be %q or %q", TransportStdio, TransportHTTP)
+	}
+
+	httpAddr := DefaultHTTPAddr
+	if rawHTTPAddr, ok := lookup("MCP_HTTP_ADDR"); ok && strings.TrimSpace(rawHTTPAddr) != "" {
+		httpAddr = strings.TrimSpace(rawHTTPAddr)
+	}
+
 	return Config{
 		Mealie: MealieConfig{
 			BaseURL: baseURL,
@@ -80,6 +111,8 @@ func LoadFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		},
 		PantryFile:   pantryFile,
 		ShoppingFile: shoppingFile,
+		Transport:    transport,
+		HTTPAddr:     httpAddr,
 	}, nil
 }
 

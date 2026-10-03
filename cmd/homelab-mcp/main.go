@@ -59,8 +59,18 @@ func main() {
 		mealietools.NewModule(mealieClient),
 		shoppingtools.NewModule(shoppingPlanner, shoppingApplier),
 	)
-	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
-		slog.Error("run MCP server", "error", err)
+
+	var runErr error
+	switch cfg.Transport {
+	case config.TransportStdio:
+		runErr = mcpServer.Run(ctx, &mcp.StdioTransport{})
+	case config.TransportHTTP:
+		runErr = server.RunHTTP(ctx, cfg.HTTPAddr, mcpServer)
+	default:
+		runErr = errors.New("unsupported MCP transport")
+	}
+	if runErr != nil && !errors.Is(runErr, context.Canceled) {
+		slog.Error("run MCP server", "error", runErr)
 		os.Exit(1)
 	}
 }

@@ -42,6 +42,14 @@ go run ./cmd/homelab-mcp
 The initial server uses MCP stdio transport. Protocol traffic uses stdout;
 application logs use stderr.
 
+For the network transport, set `MCP_TRANSPORT=http`. The server exposes the
+streamable MCP endpoint at `/mcp` and Kubernetes-friendly probes at `/healthz`
+and `/readyz`; `MCP_HTTP_ADDR` defaults to `:8080`.
+
+HTTP mode does not have authentication yet. Keep it on a trusted network or
+behind an authenticated reverse proxy until the planned Keycloak/OIDC layer is
+implemented.
+
 ## Container image
 
 The current transport is stdio, so the container is intended to be launched by
@@ -69,8 +77,31 @@ The image runs as the unprivileged `nonroot` user. `.env` is excluded from the
 build context and is never copied into the image. The example uses shell-style
 environment files, so source the file and pass only the required variables to
 Docker rather than using Docker's `--env-file` format. There is no HTTP
-healthcheck yet because the current server exposes MCP over stdio; Kubernetes
-probes will be added with the future network transport.
+healthcheck declaration yet, but HTTP mode exposes `/healthz` and `/readyz` for
+container-orchestrator probes.
+
+To run the container in HTTP mode locally:
+
+```sh
+set -a
+. ./.env
+set +a
+docker run --rm -i \
+  -e MEALIE_URL \
+  -e MEALIE_TOKEN \
+  -e MCP_TRANSPORT=http \
+  -e MCP_HTTP_ADDR=:8080 \
+  -p 8080:8080 \
+  -v "$PWD/config:/app/config:ro" \
+  homelab-mcp:dev
+```
+
+Then verify the process without creating an MCP session:
+
+```sh
+curl --fail http://127.0.0.1:8080/healthz
+curl --fail http://127.0.0.1:8080/readyz
+```
 
 ## Pantry context
 
