@@ -132,25 +132,31 @@ func TestSearchRecipesToolValidation(t *testing.T) {
 }
 
 type fakeRecipeSearcher struct {
-	page                mealieapi.RecipePage
-	recipe              mealieapi.Recipe
-	mealPlan            mealieapi.MealPlanPage
-	mealPlanParams      mealieapi.MealPlanQuery
-	mealPlanEntry       mealieapi.MealPlanEntry
-	mealPlanWrite       mealieapi.CreateMealPlanEntryParams
-	shoppingLists       mealieapi.ShoppingListPage
-	shoppingList        mealieapi.ShoppingList
-	shoppingListQuery   mealieapi.ShoppingListQuery
-	shoppingListID      string
-	got                 mealieapi.RecipeSearchParams
-	importParams        mealieapi.ImportRecipeParams
-	called              bool
-	importCalled        bool
-	mealPlanCalled      bool
-	mealPlanWriteCalled bool
-	shoppingListsCalled bool
-	shoppingListCalled  bool
-	err                 error
+	page                       mealieapi.RecipePage
+	recipe                     mealieapi.Recipe
+	mealPlan                   mealieapi.MealPlanPage
+	mealPlanParams             mealieapi.MealPlanQuery
+	mealPlanEntry              mealieapi.MealPlanEntry
+	mealPlanWrite              mealieapi.CreateMealPlanEntryParams
+	shoppingLists              mealieapi.ShoppingListPage
+	shoppingList               mealieapi.ShoppingList
+	shoppingListQuery          mealieapi.ShoppingListQuery
+	shoppingListID             string
+	shoppingListCreated        mealieapi.ShoppingList
+	shoppingListCreate         mealieapi.CreateShoppingListParams
+	shoppingItemsResult        mealieapi.ShoppingListItemsCollection
+	shoppingItemsParams        []mealieapi.CreateShoppingListItemParams
+	got                        mealieapi.RecipeSearchParams
+	importParams               mealieapi.ImportRecipeParams
+	called                     bool
+	importCalled               bool
+	mealPlanCalled             bool
+	mealPlanWriteCalled        bool
+	shoppingListsCalled        bool
+	shoppingListCalled         bool
+	shoppingListCreatedCalled  bool
+	shoppingItemsCreatedCalled bool
+	err                        error
 }
 
 func (f *fakeRecipeSearcher) SearchRecipes(_ context.Context, params mealieapi.RecipeSearchParams) (mealieapi.RecipePage, error) {
@@ -191,6 +197,18 @@ func (f *fakeRecipeSearcher) GetShoppingList(_ context.Context, listID string) (
 	f.shoppingListCalled = true
 	f.shoppingListID = listID
 	return f.shoppingList, f.err
+}
+
+func (f *fakeRecipeSearcher) CreateShoppingList(_ context.Context, params mealieapi.CreateShoppingListParams) (mealieapi.ShoppingList, error) {
+	f.shoppingListCreatedCalled = true
+	f.shoppingListCreate = params
+	return f.shoppingListCreated, f.err
+}
+
+func (f *fakeRecipeSearcher) CreateShoppingListItems(_ context.Context, params []mealieapi.CreateShoppingListItemParams) (mealieapi.ShoppingListItemsCollection, error) {
+	f.shoppingItemsCreatedCalled = true
+	f.shoppingItemsParams = params
+	return f.shoppingItemsResult, f.err
 }
 
 func contentText(t *testing.T, content mcp.Content) string {

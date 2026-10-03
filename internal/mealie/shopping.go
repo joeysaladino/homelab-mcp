@@ -15,6 +15,32 @@ type ShoppingListQuery struct {
 	PerPage int
 }
 
+// CreateShoppingListParams describes an additive shopping-list creation.
+type CreateShoppingListParams struct {
+	Name string
+}
+
+// CreateShoppingListItemParams describes one human-readable shopping item.
+// Quantity is deliberately not exposed here: synthesized grocery text goes in
+// Display and the API payload always sends quantity 0 so Mealie does not add a
+// misleading leading "1" in its UI.
+type CreateShoppingListItemParams struct {
+	ShoppingListID string
+	Display        string
+	Note           string
+	Position       int
+}
+
+// ShoppingListItemsCollection is the response returned by Mealie's bulk item
+// creation endpoint. The update/delete fields are retained because Mealie uses
+// one collection shape for bulk changes, even though this client method only
+// creates items.
+type ShoppingListItemsCollection struct {
+	CreatedItems []ShoppingListItem `json:"createdItems"`
+	UpdatedItems []ShoppingListItem `json:"updatedItems"`
+	DeletedItems []ShoppingListItem `json:"deletedItems"`
+}
+
 // ShoppingListPage is the paginated response returned by GET
 // /api/households/shopping/lists.
 type ShoppingListPage struct {
@@ -118,4 +144,88 @@ func (c *Client) GetShoppingList(ctx context.Context, listID string) (ShoppingLi
 		return ShoppingList{}, fmt.Errorf("get mealie shopping list %q: %w", identifier, err)
 	}
 	return list, nil
+}
+
+// CreateShoppingList creates one empty household shopping list.
+func (c *Client) CreateShoppingList(ctx context.Context, params CreateShoppingListParams) (ShoppingList, error) {
+	name := strings.TrimSpace(params.Name)
+	if name == "" {
+		return ShoppingList{}, fmt.Errorf("create mealie shopping list: name is required")
+	}
+
+	payload := struct {
+		Name string `json:"name"`
+	}{Name: name}
+
+	var list ShoppingList
+	if err := c.postJSON(ctx, "/api/households/shopping/lists", payload, &list); err != nil {
+		return ShoppingList{}, fmt.Errorf("create mealie shopping list: %w", err)
+	}
+	return list, nil
+}
+
+// CreateShoppingListItems adds human-readable grocery items to one existing
+// list in a single Mealie request.
+func (c *Client) CreateShoppingListItems(ctx context.Context, params []CreateShoppingListItemParams) (ShoppingListItemsCollection, error) {
+	if len(params) == 0 {
+		return ShoppingListItemsCollection{}, fmt.Errorf("create mealie shopping items: at least one item is required")
+	}
+
+	payload := make([]struct {
+		Quantity       float64 `json:"quantity"`
+		Note           string  `json:"note"`
+		Display        string  `json:"display"`
+		ShoppingListID string  `json:"shoppingListId"`
+		Checked        bool    `json:"checked"`
+		Position       int     `json:"position"`
+	}, len(params))
+	for i, item := range params {
+		listID, err := validateShoppingListID(item.ShoppingListID)
+		if err != nil {
+			return ShoppingListItemsCollection{}, fmt.Errorf("create mealie shopping items: item %d: %w", i, err)
+		}
+		display := strings.TrimSpace(item.Display)
+		if display == "" {
+			return ShoppingListItemsCollection{}, fmt.Errorf("create mealie shopping items: item %d: display is required", i)
+		}
+		if item.Position < 0 {
+			return ShoppingListItemsCollection{}, fmt.Errorf("create mealie shopping items: item %d: position must not be negative", i)
+		}
+		note := strings.TrimSpace(item.Note)
+		if note == "" {
+			note = display
+		}
+
+		payload[i] = struct {
+			Quantity       float64 `json:"quantity"`
+			Note           string  `json:"note"`
+			Display        string  `json:"display"`
+			ShoppingListID string  `json:"shoppingListId"`
+			Checked        bool    `json:"checked"`
+			Position       int     `json:"position"`
+		}{
+			Quantity:       0,
+			Note:           note,
+			Display:        display,
+			ShoppingListID: listID,
+			Position:       item.Position,
+		}
+	}
+
+	var result ShoppingListItemsCollection
+	if err := c.postJSON(ctx, "/api/households/shopping/items/create-bulk", payload, &result); err != nil {
+		return ShoppingListItemsCollection{}, fmt.Errorf("create mealie shopping items: %w", err)
+	}
+	return result, nil
+}
+
+func validateShoppingListID(value string) (string, error) {
+	identifier := strings.TrimSpace(value)
+	if identifier == "" {
+		return "", fmt.Errorf("list ID is required")
+	}
+	if strings.ContainsAny(identifier, `/\\?#`) {
+		return "", fmt.Errorf("list ID contains an invalid path character")
+	}
+	return identifier, nil
 }

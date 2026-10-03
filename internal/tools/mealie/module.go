@@ -14,6 +14,8 @@ type Service interface {
 	MealPlanWriter
 	ShoppingListLister
 	ShoppingListGetter
+	ShoppingListCreator
+	ShoppingListItemWriter
 }
 
 // Module registers all Mealie-backed MCP tools.
@@ -46,4 +48,6 @@ func (m *Module) RegisterTools(server *mcp.Server) {
 	RegisterCreateMealPlanEntry(server, m.service)
 	RegisterGetShoppingLists(server, m.service)
 	RegisterGetShoppingList(server, m.service)
+	RegisterCreateShoppingList(server, m.service)
+	RegisterAddShoppingItems(server, m.service)
 }

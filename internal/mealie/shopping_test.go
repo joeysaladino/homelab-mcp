@@ -2,6 +2,7 @@ package mealie
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -188,6 +189,171 @@ func TestGetShoppingListValidation(t *testing.T) {
 			_, err := client.GetShoppingList(context.Background(), tt.id)
 			if err == nil {
 				t.Fatal("GetShoppingList() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestCreateShoppingList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/api/households/shopping/lists" {
+			t.Errorf("path = %s, want /api/households/shopping/lists", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		if body.Name != "Mon-Tue" {
+			t.Errorf("request body = %+v, want trimmed list name", body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{
+            "id": "list-id",
+            "name": "Mon-Tue",
+            "householdId": "household-id",
+            "listItems": []
+        }`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	got, err := client.CreateShoppingList(context.Background(), CreateShoppingListParams{Name: " Mon-Tue "})
+	if err != nil {
+		t.Fatalf("CreateShoppingList() error = %v", err)
+	}
+	if got.ID != "list-id" || got.Name != "Mon-Tue" {
+		t.Fatalf("created list = %+v, want list-id/Mon-Tue", got)
+	}
+}
+
+func TestCreateShoppingListItems(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/api/households/shopping/items/create-bulk" {
+			t.Errorf("path = %s, want /api/households/shopping/items/create-bulk", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", got)
+		}
+
+		var body []struct {
+			Quantity       float64 `json:"quantity"`
+			Note           string  `json:"note"`
+			Display        string  `json:"display"`
+			ShoppingListID string  `json:"shoppingListId"`
+			Checked        bool    `json:"checked"`
+			Position       int     `json:"position"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if len(body) != 2 {
+			t.Fatalf("request body length = %d, want 2", len(body))
+		}
+		if body[0].Quantity != 0 || body[0].Display != "Ground cumin — check pantry" || body[0].Note != "Ground cumin — check pantry" || body[0].ShoppingListID != "list-id" || body[0].Checked || body[0].Position != 0 {
+			t.Errorf("first request item = %+v, want clean zero-quantity item", body[0])
+		}
+		if body[1].Quantity != 0 || body[1].Display != "2 cups rice" || body[1].Note != "Rice for dinner" || body[1].Position != 1 {
+			t.Errorf("second request item = %+v, want zero quantity and explicit note", body[1])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{
+            "createdItems": [
+                {
+                    "id": "item-one",
+                    "shoppingListId": "list-id",
+                    "quantity": 0,
+                    "note": "Ground cumin — check pantry",
+                    "display": "Ground cumin — check pantry",
+                    "checked": false,
+                    "position": 0
+                },
+                {
+                    "id": "item-two",
+                    "shoppingListId": "list-id",
+                    "quantity": 0,
+                    "note": "Rice for dinner",
+                    "display": "2 cups rice",
+                    "checked": false,
+                    "position": 1
+                }
+            ],
+            "updatedItems": [],
+            "deletedItems": []
+        }`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	got, err := client.CreateShoppingListItems(context.Background(), []CreateShoppingListItemParams{
+		{ShoppingListID: " list-id ", Display: " Ground cumin — check pantry "},
+		{ShoppingListID: "list-id", Display: "2 cups rice", Note: " Rice for dinner ", Position: 1},
+	})
+	if err != nil {
+		t.Fatalf("CreateShoppingListItems() error = %v", err)
+	}
+	if len(got.CreatedItems) != 2 || got.CreatedItems[1].Display != "2 cups rice" || got.CreatedItems[1].Note != "Rice for dinner" {
+		t.Fatalf("created items = %+v, want two decoded items", got.CreatedItems)
+	}
+}
+
+func TestCreateShoppingListValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent for invalid shopping-list creation")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	_, err := client.CreateShoppingList(context.Background(), CreateShoppingListParams{Name: "   "})
+	if err == nil || !strings.Contains(err.Error(), "name is required") {
+		t.Fatalf("CreateShoppingList() error = %v, want required name error", err)
+	}
+}
+
+func TestCreateShoppingListItemsValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent for invalid shopping-item creation")
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL, "test-token")
+	tests := []struct {
+		name   string
+		params []CreateShoppingListItemParams
+		want   string
+	}{
+		{name: "empty items", want: "at least one item is required"},
+		{name: "missing list ID", params: []CreateShoppingListItemParams{{Display: "Rice"}}, want: "list ID is required"},
+		{name: "missing display", params: []CreateShoppingListItemParams{{ShoppingListID: "list-id"}}, want: "display is required"},
+		{name: "negative position", params: []CreateShoppingListItemParams{{ShoppingListID: "list-id", Display: "Rice", Position: -1}}, want: "position must not be negative"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.CreateShoppingListItems(context.Background(), tt.params)
+			if err == nil {
+				t.Fatal("CreateShoppingListItems() error = nil, want error")
 			}
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("error = %q, want substring %q", err, tt.want)

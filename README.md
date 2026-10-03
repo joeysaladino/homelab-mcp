@@ -78,6 +78,20 @@ GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homela
 The integration test is excluded from normal test runs so local development
 does not depend on network access or a live homelab.
 
+Shopping-list writes are also opt-in. This test creates one new list and one
+item, then verifies the result. Choose unique test values and run it only when
+you intend to create those records in Mealie:
+
+```sh
+set -a
+. ./.env
+set +a
+HOMELAB_MCP_LIVE_SHOPPING_WRITE=1 \
+HOMELAB_MCP_LIVE_SHOPPING_LIST_NAME="MCP test list 2026-10-03" \
+HOMELAB_MCP_LIVE_SHOPPING_ITEM_DISPLAY="MCP test item" \
+GOCACHE=/private/tmp/homelab-mcp-go-cache go test -tags=integration ./cmd/homelab-mcp -run TestStdioServerCreateShoppingList -count=1
+```
+
 The URL-import integration test is a separate, explicit write check. It first
 looks for the exact source URL and skips if the recipe already exists:
 
