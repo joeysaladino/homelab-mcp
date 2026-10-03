@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+
+bin
+dist
+coverage.out
+*.test
+*.out
+
+config/*.local.yaml
+
+Dockerfile
+README.md

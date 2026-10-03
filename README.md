@@ -42,6 +42,36 @@ go run ./cmd/homelab-mcp
 The initial server uses MCP stdio transport. Protocol traffic uses stdout;
 application logs use stderr.
 
+## Container image
+
+The current transport is stdio, so the container is intended to be launched by
+an MCP client as its stdio subprocess. Build the image with:
+
+```sh
+docker build -t homelab-mcp:dev .
+```
+
+Run it locally with credentials supplied at runtime and the editable config
+directory mounted read-only:
+
+```sh
+set -a
+. ./.env
+set +a
+docker run --rm -i \
+  -e MEALIE_URL \
+  -e MEALIE_TOKEN \
+  -v "$PWD/config:/app/config:ro" \
+  homelab-mcp:dev
+```
+
+The image runs as the unprivileged `nonroot` user. `.env` is excluded from the
+build context and is never copied into the image. The example uses shell-style
+environment files, so source the file and pass only the required variables to
+Docker rather than using Docker's `--env-file` format. There is no HTTP
+healthcheck yet because the current server exposes MCP over stdio; Kubernetes
+probes will be added with the future network transport.
+
 ## Pantry context
 
 The default pantry file is `config/pantry.yaml`. Override its location with
