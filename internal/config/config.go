@@ -8,9 +8,14 @@ import (
 	"strings"
 )
 
+// DefaultPantryFile is the repository-relative pantry path used when
+// PANTRY_FILE is not set.
+const DefaultPantryFile = "config/pantry.yaml"
+
 // Config contains configuration for the application.
 type Config struct {
-	Mealie MealieConfig
+	Mealie     MealieConfig
+	PantryFile string
 }
 
 // MealieConfig contains the connection details for Mealie.
@@ -54,11 +59,17 @@ func LoadFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		return Config{}, fmt.Errorf("load config: MEALIE_TOKEN is required")
 	}
 
+	pantryFile := DefaultPantryFile
+	if rawPantryFile, ok := lookup("PANTRY_FILE"); ok && strings.TrimSpace(rawPantryFile) != "" {
+		pantryFile = strings.TrimSpace(rawPantryFile)
+	}
+
 	return Config{
 		Mealie: MealieConfig{
 			BaseURL: baseURL,
 			token:   strings.TrimSpace(rawToken),
 		},
+		PantryFile: pantryFile,
 	}, nil
 }
 

@@ -10,14 +10,15 @@ services.
 The initial milestone is intentionally narrow:
 
 - typed configuration for the Mealie URL and server-side token;
+- versioned, human-editable pantry configuration with inventory states;
 - a typed Mealie API client with read operations and additive URL import;
 - curated recipe, meal-plan, and shopping-list MCP tools, including read-only
   search/detail/inspection plus additive recipe import and meal-plan entry
   creation;
 - tests using an in-memory HTTP server and MCP transport.
 
-Destructive operations, pantry state, shopping-list synthesis, authentication,
-and observability will be added in later slices.
+Destructive operations, shopping-list synthesis, authentication, and
+observability will be added in later slices.
 
 Integration tools are registered as modules. The application server accepts
 generic modules, while each service owns its tool registration; adding a
@@ -37,6 +38,14 @@ go run ./cmd/homelab-mcp
 
 The initial server uses MCP stdio transport. Protocol traffic uses stdout;
 application logs use stderr.
+
+## Pantry context
+
+The default pantry file is `config/pantry.yaml`. Override its location with
+`PANTRY_FILE` when running in Docker or Kubernetes. Each item supports the
+states `have`, `low`, `out`, and `unknown`; omitted state defaults to `have`.
+The server validates this file during startup, but pantry data is not yet used
+to generate shopping lists.
 
 ## Testing
 

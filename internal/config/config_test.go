@@ -23,6 +23,7 @@ func TestLoadFromEnv(t *testing.T) {
 					BaseURL: "https://mealie.example.test",
 					token:   "secret-token",
 				},
+				PantryFile: DefaultPantryFile,
 			},
 		},
 		{
@@ -72,6 +73,9 @@ func TestLoadFromEnv(t *testing.T) {
 				if got.Mealie.Token() != tt.want.Mealie.Token() {
 					t.Errorf("Token() = %q, want %q", got.Mealie.Token(), tt.want.Mealie.Token())
 				}
+				if got.PantryFile != tt.want.PantryFile {
+					t.Errorf("PantryFile = %q, want %q", got.PantryFile, tt.want.PantryFile)
+				}
 				return
 			}
 
@@ -82,6 +86,20 @@ func TestLoadFromEnv(t *testing.T) {
 				t.Errorf("LoadFromEnv() error = %q, want substring %q", err, tt.wantError)
 			}
 		})
+	}
+}
+
+func TestLoadFromEnvPantryFileOverride(t *testing.T) {
+	got, err := LoadFromEnv(mapLookup(map[string]string{
+		"MEALIE_URL":   "https://mealie.example.test",
+		"MEALIE_TOKEN": "secret-token",
+		"PANTRY_FILE":  " /etc/homelab-mcp/pantry.yaml ",
+	}))
+	if err != nil {
+		t.Fatalf("LoadFromEnv() error = %v", err)
+	}
+	if got.PantryFile != "/etc/homelab-mcp/pantry.yaml" {
+		t.Errorf("PantryFile = %q, want trimmed override", got.PantryFile)
 	}
 }
 

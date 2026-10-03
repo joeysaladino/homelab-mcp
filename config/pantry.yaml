@@ -1,0 +1,36 @@
+version: 1
+items:
+  - name: garlic powder
+    category: spices
+    state: have
+  - name: onion powder
+    category: spices
+    state: have
+  - name: smoked paprika
+    category: spices
+    state: have
+  - name: oregano
+    category: spices
+    state: have
+  - name: salt
+    category: spices
+    state: have
+  - name: pepper
+    category: spices
+    state: have
+  - name: avocado oil
+    category: oils and condiments
+    state: have
+  - name: olive oil
+    category: oils and condiments
+    state: have
+  - name: honey
+    category: oils and condiments
+    state: have
+  - name: hot sauce
+    category: oils and condiments
+    state: have
+  - name: mustard
+    category: oils and condiments
+    state: low
+    note: running very low
