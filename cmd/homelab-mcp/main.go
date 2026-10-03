@@ -12,6 +12,7 @@ import (
 	"github.com/joeysaladino/homelab-mcp/internal/mealie"
 	"github.com/joeysaladino/homelab-mcp/internal/pantry"
 	"github.com/joeysaladino/homelab-mcp/internal/server"
+	shoppingconfig "github.com/joeysaladino/homelab-mcp/internal/shopping"
 	mealietools "github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -39,6 +40,13 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("loaded pantry context", "path", cfg.PantryFile, "items", len(pantryContext.Items))
+
+	shoppingPlan, err := shoppingconfig.LoadFile(cfg.ShoppingFile)
+	if err != nil {
+		slog.Error("load shopping-trip configuration", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("loaded shopping-trip configuration", "path", cfg.ShoppingFile, "trips", len(shoppingPlan.Trips))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

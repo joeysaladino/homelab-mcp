@@ -1,0 +1,11 @@
+version: 1
+trips:
+  - name: Grocery Run 1
+    weekdays:
+      - monday
+      - tuesday
+  - name: Grocery Run 2
+    weekdays:
+      - wednesday
+      - thursday
+      - friday

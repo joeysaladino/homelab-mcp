@@ -12,10 +12,15 @@ import (
 // PANTRY_FILE is not set.
 const DefaultPantryFile = "config/pantry.yaml"
 
+// DefaultShoppingFile is the repository-relative shopping-trip path used when
+// SHOPPING_FILE is not set.
+const DefaultShoppingFile = "config/shopping.yaml"
+
 // Config contains configuration for the application.
 type Config struct {
-	Mealie     MealieConfig
-	PantryFile string
+	Mealie       MealieConfig
+	PantryFile   string
+	ShoppingFile string
 }
 
 // MealieConfig contains the connection details for Mealie.
@@ -63,13 +68,18 @@ func LoadFromEnv(lookup func(string) (string, bool)) (Config, error) {
 	if rawPantryFile, ok := lookup("PANTRY_FILE"); ok && strings.TrimSpace(rawPantryFile) != "" {
 		pantryFile = strings.TrimSpace(rawPantryFile)
 	}
+	shoppingFile := DefaultShoppingFile
+	if rawShoppingFile, ok := lookup("SHOPPING_FILE"); ok && strings.TrimSpace(rawShoppingFile) != "" {
+		shoppingFile = strings.TrimSpace(rawShoppingFile)
+	}
 
 	return Config{
 		Mealie: MealieConfig{
 			BaseURL: baseURL,
 			token:   strings.TrimSpace(rawToken),
 		},
-		PantryFile: pantryFile,
+		PantryFile:   pantryFile,
+		ShoppingFile: shoppingFile,
 	}, nil
 }
 
