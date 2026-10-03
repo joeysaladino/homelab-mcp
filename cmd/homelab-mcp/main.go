@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	goauth "github.com/joeysaladino/homelab-mcp/internal/auth"
 	"github.com/joeysaladino/homelab-mcp/internal/config"
 	"github.com/joeysaladino/homelab-mcp/internal/mealie"
 	"github.com/joeysaladino/homelab-mcp/internal/pantry"
@@ -15,7 +18,9 @@ import (
 	shoppingconfig "github.com/joeysaladino/homelab-mcp/internal/shopping"
 	mealietools "github.com/joeysaladino/homelab-mcp/internal/tools/mealie"
 	shoppingtools "github.com/joeysaladino/homelab-mcp/internal/tools/shopping"
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 func main() {
@@ -65,7 +70,12 @@ func main() {
 	case config.TransportStdio:
 		runErr = mcpServer.Run(ctx, &mcp.StdioTransport{})
 	case config.TransportHTTP:
-		runErr = server.RunHTTP(ctx, cfg.HTTPAddr, mcpServer)
+		httpOptions, err := buildHTTPOptions(ctx, cfg)
+		if err != nil {
+			runErr = fmt.Errorf("configure HTTP authentication: %w", err)
+		} else {
+			runErr = server.RunHTTP(ctx, cfg.HTTPAddr, mcpServer, httpOptions)
+		}
 	default:
 		runErr = errors.New("unsupported MCP transport")
 	}
@@ -73,4 +83,39 @@ func main() {
 		slog.Error("run MCP server", "error", runErr)
 		os.Exit(1)
 	}
+}
+
+func buildHTTPOptions(ctx context.Context, cfg config.Config) (server.HTTPOptions, error) {
+	if cfg.AuthMode == config.AuthNone {
+		return server.HTTPOptions{}, nil
+	}
+	if cfg.AuthMode != config.AuthOIDC {
+		return server.HTTPOptions{}, fmt.Errorf("unsupported authentication mode %q", cfg.AuthMode)
+	}
+
+	discoveryContext, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	verifier, err := goauth.NewOIDCVerifier(discoveryContext, goauth.OIDCConfig{
+		IssuerURL: cfg.OIDCIssuerURL,
+		Audience:  cfg.OIDCAudience,
+	})
+	if err != nil {
+		return server.HTTPOptions{}, err
+	}
+
+	metadata := &oauthex.ProtectedResourceMetadata{
+		Resource:             cfg.PublicURL,
+		AuthorizationServers: []string{cfg.OIDCIssuerURL},
+		ScopesSupported:      cfg.OIDCScopes,
+		BearerMethodsSupported: []string{
+			"header",
+		},
+	}
+	return server.HTTPOptions{
+		AuthMiddleware: mcpauth.RequireBearerToken(verifier.Verify, &mcpauth.RequireBearerTokenOptions{
+			ResourceMetadataURL: cfg.MetadataURL,
+			Scopes:              cfg.OIDCScopes,
+		}),
+		ProtectedResourceMetadata: mcpauth.ProtectedResourceMetadataHandler(metadata),
+	}, nil
 }

@@ -50,8 +50,36 @@ spec:
                   key: MEALIE_TOKEN
             - name: MCP_TRANSPORT
               value: http
+            - name: MCP_AUTH_MODE
+              value: oidc
             - name: MCP_HTTP_ADDR
               value: ":8080"
+            - name: OIDC_ISSUER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-oidc
+                  key: OIDC_ISSUER_URL
+            - name: OIDC_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-oidc
+                  key: OIDC_AUDIENCE
+            - name: MCP_PUBLIC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-oidc
+                  key: MCP_PUBLIC_URL
+            - name: MCP_RESOURCE_METADATA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-oidc
+                  key: MCP_RESOURCE_METADATA_URL
+            - name: OIDC_REQUIRED_SCOPES
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-oidc
+                  key: OIDC_REQUIRED_SCOPES
+                  optional: true
             - name: PANTRY_FILE
               value: /app/config/pantry.yaml
             - name: SHOPPING_FILE

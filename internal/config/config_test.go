@@ -27,6 +27,7 @@ func TestLoadFromEnv(t *testing.T) {
 				ShoppingFile: DefaultShoppingFile,
 				Transport:    DefaultTransport,
 				HTTPAddr:     DefaultHTTPAddr,
+				AuthMode:     AuthNone,
 			},
 		},
 		{
@@ -88,6 +89,9 @@ func TestLoadFromEnv(t *testing.T) {
 				if got.HTTPAddr != tt.want.HTTPAddr {
 					t.Errorf("HTTPAddr = %q, want %q", got.HTTPAddr, tt.want.HTTPAddr)
 				}
+				if got.AuthMode != tt.want.AuthMode {
+					t.Errorf("AuthMode = %q, want %q", got.AuthMode, tt.want.AuthMode)
+				}
 				return
 			}
 
@@ -121,10 +125,16 @@ func TestLoadFromEnvPantryFileOverride(t *testing.T) {
 
 func TestLoadFromEnvHTTPTransport(t *testing.T) {
 	got, err := LoadFromEnv(mapLookup(map[string]string{
-		"MEALIE_URL":    "https://mealie.example.test",
-		"MEALIE_TOKEN":  "secret-token",
-		"MCP_TRANSPORT": " HTTP ",
-		"MCP_HTTP_ADDR": " 127.0.0.1:9090 ",
+		"MEALIE_URL":                "https://mealie.example.test",
+		"MEALIE_TOKEN":              "secret-token",
+		"MCP_TRANSPORT":             " HTTP ",
+		"MCP_HTTP_ADDR":             " 127.0.0.1:9090 ",
+		"MCP_AUTH_MODE":             "oidc",
+		"OIDC_ISSUER_URL":           "https://sso.example.test/realms/home",
+		"OIDC_AUDIENCE":             "homelab-mcp",
+		"OIDC_REQUIRED_SCOPES":      "mcp.read mcp.write",
+		"MCP_PUBLIC_URL":            "https://mcp.example.test/mcp",
+		"MCP_RESOURCE_METADATA_URL": "https://mcp.example.test/.well-known/oauth-protected-resource",
 	}))
 	if err != nil {
 		t.Fatalf("LoadFromEnv() error = %v", err)
@@ -134,6 +144,39 @@ func TestLoadFromEnvHTTPTransport(t *testing.T) {
 	}
 	if got.HTTPAddr != "127.0.0.1:9090" {
 		t.Errorf("HTTPAddr = %q, want trimmed override", got.HTTPAddr)
+	}
+	if got.AuthMode != AuthOIDC || got.OIDCIssuerURL != "https://sso.example.test/realms/home" || got.OIDCAudience != "homelab-mcp" {
+		t.Errorf("OIDC config = mode %q issuer %q audience %q", got.AuthMode, got.OIDCIssuerURL, got.OIDCAudience)
+	}
+	if len(got.OIDCScopes) != 2 || got.OIDCScopes[0] != "mcp.read" || got.OIDCScopes[1] != "mcp.write" {
+		t.Errorf("OIDCScopes = %+v, want two configured scopes", got.OIDCScopes)
+	}
+	if got.PublicURL != "https://mcp.example.test/mcp" || got.MetadataURL != "https://mcp.example.test/.well-known/oauth-protected-resource" {
+		t.Errorf("resource URLs = %q/%q, want trimmed URLs", got.PublicURL, got.MetadataURL)
+	}
+}
+
+func TestLoadFromEnvHTTPRequiresExplicitNoAuthOrOIDC(t *testing.T) {
+	_, err := LoadFromEnv(mapLookup(map[string]string{
+		"MEALIE_URL":    "https://mealie.example.test",
+		"MEALIE_TOKEN":  "secret-token",
+		"MCP_TRANSPORT": "http",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "OIDC_ISSUER_URL is required") {
+		t.Fatalf("LoadFromEnv() error = %v, want fail-closed OIDC configuration error", err)
+	}
+
+	got, err := LoadFromEnv(mapLookup(map[string]string{
+		"MEALIE_URL":    "https://mealie.example.test",
+		"MEALIE_TOKEN":  "secret-token",
+		"MCP_TRANSPORT": "http",
+		"MCP_AUTH_MODE": "none",
+	}))
+	if err != nil {
+		t.Fatalf("LoadFromEnv() explicit no-auth error = %v", err)
+	}
+	if got.AuthMode != AuthNone {
+		t.Errorf("AuthMode = %q, want %q", got.AuthMode, AuthNone)
 	}
 }
 

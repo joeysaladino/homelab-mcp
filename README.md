@@ -16,10 +16,13 @@ The initial milestone is intentionally narrow:
 - curated recipe, meal-plan, shopping-list, and grocery-draft MCP tools,
   including read-only search/detail/inspection, additive recipe import and
   meal-plan entry creation, and a confirmation-gated grocery-list apply tool;
+- an initial Keycloak-compatible OIDC bearer-token boundary for HTTP transport;
 - tests using an in-memory HTTP server and MCP transport.
 
-Destructive operations, authentication, and observability will be added in
-later slices. Grocery semantics are intentionally split: the server gathers
+Destructive operations and observability will be added in later slices.
+Authorization policy beyond configured scopes, audit logging, and richer
+identity mapping are still future work. Grocery semantics are intentionally
+split: the server gathers
 recipe and pantry context, while the LLM proposes the human-friendly merged
 items and the server validates and writes them only after confirmation.
 
@@ -46,9 +49,25 @@ For the network transport, set `MCP_TRANSPORT=http`. The server exposes the
 streamable MCP endpoint at `/mcp` and Kubernetes-friendly probes at `/healthz`
 and `/readyz`; `MCP_HTTP_ADDR` defaults to `:8080`.
 
-HTTP mode does not have authentication yet. Keep it on a trusted network or
-behind an authenticated reverse proxy until the planned Keycloak/OIDC layer is
-implemented.
+HTTP mode defaults to OIDC authentication and fails closed when the required
+OIDC settings are missing. Set `MCP_AUTH_MODE=none` only for isolated local
+development. The current implementation validates bearer JWTs against the
+configured issuer's discovery/JWKS endpoints, enforces the configured
+audience, and can require space-separated scopes via `OIDC_REQUIRED_SCOPES`.
+
+The server does not perform the client login flow or store user credentials;
+an MCP client obtains an access token from Keycloak and sends it in the
+`Authorization: Bearer` header. The protected-resource metadata endpoint is
+available at `/.well-known/oauth-protected-resource` so OAuth-aware clients can
+discover the configured authorization server.
+
+For the initial Keycloak setup, use the realm issuer URL—not the Keycloak base
+URL—as `OIDC_ISSUER_URL`, and set `OIDC_AUDIENCE` to the client identifier that
+must appear in the access token's `aud` claim. If the access token only contains
+the MCP client in `azp`, add a Keycloak audience protocol mapper so `aud`
+contains the configured audience. Scope enforcement is optional until a scope
+model is agreed; when enabled, the required values must be present in the
+token's `scope` claim.
 
 ## Container image
 
@@ -76,9 +95,10 @@ docker run --rm -i \
 The image runs as the unprivileged `nonroot` user. `.env` is excluded from the
 build context and is never copied into the image. The example uses shell-style
 environment files, so source the file and pass only the required variables to
-Docker rather than using Docker's `--env-file` format. There is no HTTP
-healthcheck declaration yet, but HTTP mode exposes `/healthz` and `/readyz` for
-container-orchestrator probes.
+Docker rather than using Docker's `--env-file` format. HTTP mode defaults to
+OIDC; the explicit `MCP_AUTH_MODE=none` below is only for an isolated local
+smoke test. HTTP mode exposes `/healthz` and `/readyz` for container-
+orchestrator probes.
 
 To run the container in HTTP mode locally:
 
@@ -90,6 +110,7 @@ docker run --rm -i \
   -e MEALIE_URL \
   -e MEALIE_TOKEN \
   -e MCP_TRANSPORT=http \
+  -e MCP_AUTH_MODE=none \
   -e MCP_HTTP_ADDR=:8080 \
   -p 8080:8080 \
   -v "$PWD/config:/app/config:ro" \
@@ -105,10 +126,11 @@ curl --fail http://127.0.0.1:8080/readyz
 
 ## Kubernetes manifests
 
-The starter manifests are in `deploy/kubernetes/base`. They run one HTTP-mode
-replica behind an internal `ClusterIP` Service, mount the pantry and shopping
-configuration from a generated ConfigMap, disable the ServiceAccount token, and
-use the container's health/readiness endpoints for probes.
+The starter manifests are in `deploy/kubernetes/base`. They run one
+OIDC-protected HTTP-mode replica behind an internal `ClusterIP` Service, mount
+the pantry and shopping configuration from an external ConfigMap, disable the
+ServiceAccount token, and use the container's health/readiness endpoints for
+probes.
 
 Create the Mealie Secret separately; no credential values belong in Git:
 
@@ -119,6 +141,19 @@ set +a
 kubectl create secret generic homelab-mcp-mealie \
   --from-literal=MEALIE_URL="$MEALIE_URL" \
   --from-literal=MEALIE_TOKEN="$MEALIE_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Create the OIDC runtime settings separately. These values are not necessarily
+secret, but keeping them in a separately managed object avoids putting
+environment-specific Keycloak and public-URL details in the base manifest:
+
+```sh
+kubectl create secret generic homelab-mcp-oidc \
+  --from-literal=OIDC_ISSUER_URL="$OIDC_ISSUER_URL" \
+  --from-literal=OIDC_AUDIENCE="$OIDC_AUDIENCE" \
+  --from-literal=MCP_PUBLIC_URL="$MCP_PUBLIC_URL" \
+  --from-literal=MCP_RESOURCE_METADATA_URL="$MCP_RESOURCE_METADATA_URL" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -141,9 +176,9 @@ kubectl kustomize deploy/kubernetes/base
 kubectl apply -k deploy/kubernetes/base
 ```
 
-There is intentionally no Ingress in this base. HTTP mode is not authenticated
-yet; expose it only through a trusted internal path or an authenticated reverse
-proxy until the OIDC boundary is added.
+There is intentionally no Ingress in this base. Add one only after setting the
+public URLs to the actual external route and confirming that the reverse proxy
+preserves the `Authorization` header.
 
 ## Pantry context
 

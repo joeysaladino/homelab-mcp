@@ -24,6 +24,14 @@ const (
 	TransportHTTP  Transport = "http"
 )
 
+// AuthMode selects the authentication policy for network transport.
+type AuthMode string
+
+const (
+	AuthNone AuthMode = "none"
+	AuthOIDC AuthMode = "oidc"
+)
+
 const (
 	// DefaultTransport keeps local development compatible with MCP clients
 	// that launch the server as a subprocess.
@@ -34,11 +42,17 @@ const (
 
 // Config contains configuration for the application.
 type Config struct {
-	Mealie       MealieConfig
-	PantryFile   string
-	ShoppingFile string
-	Transport    Transport
-	HTTPAddr     string
+	Mealie        MealieConfig
+	PantryFile    string
+	ShoppingFile  string
+	Transport     Transport
+	HTTPAddr      string
+	AuthMode      AuthMode
+	OIDCIssuerURL string
+	OIDCAudience  string
+	OIDCScopes    []string
+	PublicURL     string
+	MetadataURL   string
 }
 
 // MealieConfig contains the connection details for Mealie.
@@ -104,16 +118,80 @@ func LoadFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		httpAddr = strings.TrimSpace(rawHTTPAddr)
 	}
 
+	authMode := AuthNone
+	rawAuthMode, authModeSet := lookup("MCP_AUTH_MODE")
+	if authModeSet && strings.TrimSpace(rawAuthMode) != "" {
+		authMode = AuthMode(strings.ToLower(strings.TrimSpace(rawAuthMode)))
+	} else if transport == TransportHTTP {
+		// Network transport fails closed unless local development explicitly opts
+		// out. Stdio has no network listener and therefore needs no auth mode.
+		authMode = AuthOIDC
+	}
+	if authMode != AuthNone && authMode != AuthOIDC {
+		return Config{}, fmt.Errorf("load config: MCP_AUTH_MODE must be %q or %q", AuthNone, AuthOIDC)
+	}
+
+	var issuerURL, audience, publicURL, metadataURL string
+	var oidcScopes []string
+	if authMode == AuthOIDC {
+		var err error
+		issuerURL, err = requiredConfiguredURL(lookup, "OIDC_ISSUER_URL")
+		if err != nil {
+			return Config{}, err
+		}
+		audience, err = requiredConfiguredValue(lookup, "OIDC_AUDIENCE")
+		if err != nil {
+			return Config{}, err
+		}
+		publicURL, err = requiredConfiguredURL(lookup, "MCP_PUBLIC_URL")
+		if err != nil {
+			return Config{}, err
+		}
+		metadataURL, err = requiredConfiguredURL(lookup, "MCP_RESOURCE_METADATA_URL")
+		if err != nil {
+			return Config{}, err
+		}
+		if rawScopes, ok := lookup("OIDC_REQUIRED_SCOPES"); ok {
+			oidcScopes = strings.Fields(rawScopes)
+		}
+	}
+
 	return Config{
 		Mealie: MealieConfig{
 			BaseURL: baseURL,
 			token:   strings.TrimSpace(rawToken),
 		},
-		PantryFile:   pantryFile,
-		ShoppingFile: shoppingFile,
-		Transport:    transport,
-		HTTPAddr:     httpAddr,
+		PantryFile:    pantryFile,
+		ShoppingFile:  shoppingFile,
+		Transport:     transport,
+		HTTPAddr:      httpAddr,
+		AuthMode:      authMode,
+		OIDCIssuerURL: issuerURL,
+		OIDCAudience:  audience,
+		OIDCScopes:    oidcScopes,
+		PublicURL:     publicURL,
+		MetadataURL:   metadataURL,
 	}, nil
+}
+
+func requiredConfiguredValue(lookup func(string) (string, bool), name string) (string, error) {
+	raw, ok := lookup(name)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return "", fmt.Errorf("load config: %s is required when OIDC authentication is enabled", name)
+	}
+	return strings.TrimSpace(raw), nil
+}
+
+func requiredConfiguredURL(lookup func(string) (string, bool), name string) (string, error) {
+	raw, err := requiredConfiguredValue(lookup, name)
+	if err != nil {
+		return "", err
+	}
+	value, err := normalizeBaseURL(raw)
+	if err != nil {
+		return "", fmt.Errorf("load config: %s: %w", name, err)
+	}
+	return value, nil
 }
 
 func normalizeBaseURL(raw string) (string, error) {
