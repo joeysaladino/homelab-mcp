@@ -50,13 +50,14 @@ func main() {
 	slog.Info("loaded shopping-trip configuration", "path", cfg.ShoppingFile, "trips", len(shoppingPlan.Trips))
 
 	shoppingPlanner := shoppingconfig.NewPlanner(mealieClient, mealieClient, pantryContext, shoppingPlan)
+	shoppingApplier := shoppingconfig.NewApplier(mealieClient, mealieClient)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	mcpServer := server.New(
 		mealietools.NewModule(mealieClient),
-		shoppingtools.NewModule(shoppingPlanner),
+		shoppingtools.NewModule(shoppingPlanner, shoppingApplier),
 	)
 	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("run MCP server", "error", err)

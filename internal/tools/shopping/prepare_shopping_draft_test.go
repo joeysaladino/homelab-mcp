@@ -51,7 +51,7 @@ func TestPrepareShoppingDraftToolOverMCP(t *testing.T) {
 	}
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(shoppingtools.NewModule(builder))
+	mcpServer := server.New(shoppingtools.NewModule(builder, builder))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -109,7 +109,7 @@ func TestPrepareShoppingDraftToolOverMCP(t *testing.T) {
 func TestPrepareShoppingDraftToolValidation(t *testing.T) {
 	builder := &fakeDraftBuilder{}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(shoppingtools.NewModule(builder))
+	mcpServer := server.New(shoppingtools.NewModule(builder, builder))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -159,7 +159,7 @@ func TestPrepareShoppingDraftToolValidation(t *testing.T) {
 func TestPrepareShoppingDraftToolError(t *testing.T) {
 	builder := &fakeDraftBuilder{err: errors.New("planner failed")}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	mcpServer := server.New(shoppingtools.NewModule(builder))
+	mcpServer := server.New(shoppingtools.NewModule(builder, builder))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -200,6 +200,10 @@ func (f *fakeDraftBuilder) BuildShoppingDraft(_ context.Context, params shopping
 	f.called = true
 	f.params = params
 	return f.draft, f.err
+}
+
+func (f *fakeDraftBuilder) ApplyShoppingLists(_ context.Context, _ shoppingdomain.ShoppingListDraft) (shoppingdomain.ApplyShoppingListsResult, error) {
+	return shoppingdomain.ApplyShoppingListsResult{}, nil
 }
 
 func contentText(t *testing.T, content mcp.Content) string {
