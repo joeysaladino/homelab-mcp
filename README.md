@@ -103,6 +103,48 @@ curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
 ```
 
+## Kubernetes manifests
+
+The starter manifests are in `deploy/kubernetes/base`. They run one HTTP-mode
+replica behind an internal `ClusterIP` Service, mount the pantry and shopping
+configuration from a generated ConfigMap, disable the ServiceAccount token, and
+use the container's health/readiness endpoints for probes.
+
+Create the Mealie Secret separately; no credential values belong in Git:
+
+```sh
+set -a
+. ./.env
+set +a
+kubectl create secret generic homelab-mcp-mealie \
+  --from-literal=MEALIE_URL="$MEALIE_URL" \
+  --from-literal=MEALIE_TOKEN="$MEALIE_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Create or refresh the household ConfigMap from the repository's canonical
+configuration files:
+
+```sh
+kubectl create configmap homelab-mcp-config \
+  --from-file=pantry.yaml=config/pantry.yaml \
+  --from-file=shopping.yaml=config/shopping.yaml \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Before applying, change the placeholder image `homelab-mcp:0.1.0` in the
+manifest or provide a Kustomize overlay that points to the image registry used
+by your cluster:
+
+```sh
+kubectl kustomize deploy/kubernetes/base
+kubectl apply -k deploy/kubernetes/base
+```
+
+There is intentionally no Ingress in this base. HTTP mode is not authenticated
+yet; expose it only through a trusted internal path or an authenticated reverse
+proxy until the OIDC boundary is added.
+
 ## Pantry context
 
 The default pantry file is `config/pantry.yaml`. Override its location with

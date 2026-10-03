@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homelab-mcp
+  labels:
+    app.kubernetes.io/name: homelab-mcp
+    app.kubernetes.io/component: mcp-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homelab-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homelab-mcp
+        app.kubernetes.io/component: mcp-gateway
+    spec:
+      serviceAccountName: homelab-mcp
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: homelab-mcp
+          image: homelab-mcp:0.1.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MEALIE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-mealie
+                  key: MEALIE_URL
+            - name: MEALIE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-mcp-mealie
+                  key: MEALIE_TOKEN
+            - name: MCP_TRANSPORT
+              value: http
+            - name: MCP_HTTP_ADDR
+              value: ":8080"
+            - name: PANTRY_FILE
+              value: /app/config/pantry.yaml
+            - name: SHOPPING_FILE
+              value: /app/config/shopping.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: homelab-mcp-config
